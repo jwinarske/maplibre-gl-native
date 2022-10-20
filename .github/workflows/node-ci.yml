@@ -141,7 +141,7 @@ jobs:
         run: ccache --clear --set-config cache_dir=~/.ccache
 
       - name: Cache ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v3.0.11
         env:
           cache-name: ccache-v1
         with:

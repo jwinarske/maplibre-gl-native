@@ -37,7 +37,7 @@ jobs:
         shell: bash 
 
       - name: Cache node modules
-        uses: actions/cache@v3
+        uses: actions/cache@v3.0.11
         env:
           cache-name: cache-node-modules
         with:
@@ -56,7 +56,7 @@ jobs:
         run: ccache --clear       
 
       - name: Cache ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v3.0.11
         env:
           cache-name: ccache-v1     
         with:
@@ -74,7 +74,7 @@ jobs:
           ccache --show-stats   
 
       - name: restore-gradle-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v3.0.11
         env:
           cache-name: gradle-v1
         with:
