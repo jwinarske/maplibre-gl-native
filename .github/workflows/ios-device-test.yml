@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.repository_owner == 'maplibre' && github.event.workflow_run.conclusion == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Generate token
         id: generate_token
@@ -50,7 +50,7 @@ jobs:
           files: "${{ matrix.test.xcTestFile }}, ${{ matrix.test.ipaFile }}"
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-region: us-west-2
           role-to-assume: ${{ vars.OIDC_AWS_ROLE_TO_ASSUME }}

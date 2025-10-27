@@ -68,9 +68,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'maplibre' && github.event.workflow_run.conclusion == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
 
@@ -95,7 +95,7 @@ jobs:
 
       - name: Check if comment on PR contains '!benchmark android'
         if: matrix.test.name == 'Android Benchmark' && steps.get-pr-number.outputs.pr-number
-        uses: peter-evans/find-comment@v3
+        uses: peter-evans/find-comment@v4
         id: benchmark_comment
         with:
           issue-number: ${{ steps.get-pr-number.outputs.pr-number }}
@@ -129,7 +129,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: env.run_device_test == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-region: us-west-2
           role-to-assume: ${{ vars.OIDC_AWS_ROLE_TO_ASSUME }}
@@ -170,7 +170,7 @@ jobs:
 
       - name: Upload Test Artifacts
         if: (matrix.test.name == 'Android Benchmark' || failure()) && env.run_device_test == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: "Test Artifacts ${{ matrix.test.name }}"
           path: test_artifacts.zip
