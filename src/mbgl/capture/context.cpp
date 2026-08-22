@@ -56,6 +56,10 @@ void Context::endFrame() {
         return;
     }
 
+    // The renderer writes the frame-wide parameters partway through the frame
+    // (renderer_impl.cpp:301-313), so they are picked up here rather than at beginFrame.
+    emitGlobalUniforms();
+
     // One texture envelope per frame, not one per sub-region upload. The glyph and icon
     // atlases insert many small regions per frame and each flush hashes the whole texture,
     // so flushing eagerly would be O(atlas bytes) per glyph.
@@ -160,6 +164,27 @@ std::unique_ptr<gfx::DrawScopeResource> Context::createDrawScopeResource() {
     return std::make_unique<DrawScopeResource>();
 }
 
+void Context::emitGlobalUniforms() {
+    for (std::size_t slot = 0; slot < globalUniformBuffers.allocatedSize(); ++slot) {
+        const auto& buffer = globalUniformBuffers.get(slot);
+        if (!buffer) {
+            continue;
+        }
+        auto& captured = static_cast<UniformBuffer&>(*buffer);
+        if (!captured.isDirty()) {
+            continue;
+        }
+        sink.onUboUpdate(UboUpdate{.mapId = mapId,
+                                   .isGlobal = true,
+                                   .layerIndex = std::nullopt,
+                                   .ownerId = std::nullopt,
+                                   .slot = slot,
+                                   .data = captured.getContents().data(),
+                                   .size = captured.getContents().size()});
+        captured.clearDirty();
+    }
+}
+
 void Context::registerDirtyTexture(Texture2D& texture) {
     dirtyTextures.insert(&texture);
 }
@@ -183,8 +208,13 @@ void Context::recordDrawableUboUpdate(const util::SimpleIdentity& owner,
                                       std::size_t slot,
                                       const void* data,
                                       std::size_t size) {
-    sink.onUboUpdate(UboUpdate{
-        .mapId = mapId, .layerIndex = std::nullopt, .ownerId = owner, .slot = slot, .data = data, .size = size});
+    sink.onUboUpdate(UboUpdate{.mapId = mapId,
+                               .isGlobal = false,
+                               .layerIndex = std::nullopt,
+                               .ownerId = owner,
+                               .slot = slot,
+                               .data = data,
+                               .size = size});
 }
 
 void Context::recordLayerUboUpdate(std::int32_t layerIndex, std::size_t slot, const void* data, std::size_t size) {

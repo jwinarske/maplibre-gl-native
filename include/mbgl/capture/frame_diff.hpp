@@ -148,6 +148,11 @@ struct DrawableRemove {
 /// own buffers (and non-consolidating builds) arrive the other way round.
 struct UboUpdate {
     MapID mapId = 0;
+    /// True for the frame-wide buffers the renderer maintains rather than any one layer --
+    /// `GlobalPaintParamsUBO` and friends. Neither `layerIndex` nor `ownerId` is set for
+    /// these. Layers that size geometry in screen space rather than tile space
+    /// (circle billboards, line widths) cannot be reconstructed without them.
+    bool isGlobal = false;
     /// Set when the buffer belongs to a layer group.
     std::optional<std::int32_t> layerIndex;
     /// Set when the buffer belongs to a single drawable.
