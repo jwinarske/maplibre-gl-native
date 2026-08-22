@@ -13,6 +13,7 @@ option(MLN_WITH_EGL "Build with EGL renderer" OFF)
 option(MLN_WITH_VULKAN "Build with Vulkan renderer" OFF)
 option(MLN_WITH_METAL "Build with Metal renderer" OFF)
 option(MLN_WITH_WEBGPU "Build with WebGPU renderer" OFF)
+option(MLN_WITH_CAPTURE "Build with the ECS capture renderer backend" OFF)
 option(MLN_WITH_PMTILES "Build with PMTiles support" ON)
 option(MLN_WITH_WERROR "Make all compilation warnings errors" ON)
 option(MLN_USE_UNORDERED_DENSE "Use ankerl dense containers for performance" ON)
@@ -1015,6 +1016,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/opengl.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/metal.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/vulkan.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/webgpu.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/capture.cmake)
 
 list(APPEND
     SRC_FILES
