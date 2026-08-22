@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Geometry Tile Worker - MapLibre Native Developer Documentation</title>
+        <title>Building with Microsoft Visual Studio - MapLibre Native Developer Documentation</title>
 
 
         <!-- Custom HTML head -->
@@ -49,34 +49,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../favicon-735396af.svg">
-        <link rel="shortcut icon" href="../favicon-e797cf1c.png">
-        <link rel="stylesheet" href="../css/variables-8adf115d.css">
-        <link rel="stylesheet" href="../css/general-e96d0476.css">
-        <link rel="stylesheet" href="../css/chrome-d279d366.css">
-        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+        <link rel="icon" href="../../favicon-735396af.svg">
+        <link rel="shortcut icon" href="../../favicon-e797cf1c.png">
+        <link rel="stylesheet" href="../../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../../css/general-e96d0476.css">
+        <link rel="stylesheet" href="../../css/chrome-d279d366.css">
+        <link rel="stylesheet" href="../../css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+        <link rel="stylesheet" href="../../fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
-        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
-        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../../ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
-        <link rel="stylesheet" href="../diff-a3e96580.css">
+        <link rel="stylesheet" href="../../diff-a3e96580.css">
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../";
+            const path_to_root = "../../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-07167a6c.js";
+            window.path_to_searchindex_js = "../../searchindex-07167a6c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc-24c1b73c.js"></script>
+        <script src="../../toc-24c1b73c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -143,7 +143,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -178,7 +178,7 @@
                     <h1 class="menu-title">MapLibre Native Developer Documentation</h1>
 
                     <div class="right-buttons">
-                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
 
@@ -212,119 +212,135 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="geometry-tile-worker"><a class="header" href="#geometry-tile-worker">Geometry Tile Worker</a></h1>
-<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="media/geometry-tile-worker-state-machine.jpg" alt=""><span class="img-wrapper"><img src="media/geometry-tile-worker-state-machine.jpg" alt=""></span></label>
-<em>Figure 8: Simplified Geometry Tile Worker State Machine</em></p>
-<p>Going back to Geometry Tile Worker, it is
-a state machine. The main principle is that Geometry Tile Worker should
-carry out each task till completion once it has begun even if it
-requires asynchronous waiting<sup class="footnote-reference" id="fr-21-1"><a href="#footnote-21">1</a></sup>. When a Geometry Tile Worker is
-working on a task, any new message to said worker is queued. Messages
-per <em>unique tile</em> are grouped. Upon finishing work, Geometry Tile Worker
-picks the latest message from the queue. All changes introduced in the
-queued messages are <em>coalesced</em> for the next work item for the tile
-worker. This way, a Geometry Tile Worker saves itself from starvation
-when it is under heavy workload. <em>Coalescing</em> also helps at finalizing
-the result when all the messages are processed because the map has
-stopped moving.</p>
-<p>To dive a little bit deeper into this process, let’s have a quick look
-at Figure 8. It shows a simplified representation of Geometry Tile
-Worker state machine. From a cursory look, the state transitions might
-not seem self-explanatory. We will take one step at a time to clarify.</p>
-<p><em>Going forward, this section will use the term <strong>worker</strong> to denote a
-<strong>Geometry Tile Worker</strong> for brevity.</em></p>
-<p>A <em>worker</em> is <em>Idle</em> when it has nothing to work on or completed
-<em>coalescing</em> queued messages. It is in <em>Coalescing</em> state when it has
-not finished processing all the messages in the queue. These two states
-are the two key states the <em>worker</em> floats between.</p>
-<p>The initial transition from <em>Idle</em> to <em>coalescing</em> starts from a
-<em><strong>set</strong></em> message. A worker can receive a <strong>set</strong> message for data or a
-layer that is dependent on data. Referring back to <strong>Figure 8</strong>, this is
-what the transition label (<strong>set</strong> {Data, Layers} ) from <em>Idle</em> to
-<em>Coalescing</em> state stands for. This initiates an internal workflow named
-<em><strong>Parsing.</strong></em> Parsing means understanding the features to be rendered
-in a layer. Parsing process is encapsulated in <em>parse()</em> method. In the
-end of this method, a worker will also deduce required glyphs and images
-to render the tile.</p>
-<p>A worker will send a message to the Tile it is working on fetching the
-necessary glyphs and images. From a threading perspective, it can happen
-in the same thread as the worker or in a different thread. Looking back
-to Figure 8, we also see another transition path from <em>Idle</em> state to
-<em>coalescing</em> state through <em>symbolDependenciesChanged</em> event. When a
-tile object is done with downloading pending glyphs and images it issues
-a <em>onImagesAvailable</em> or <em>onGlyphsAvailable</em> event to the worker<sup class="footnote-reference" id="fr-22-1"><a href="#footnote-22">2</a></sup>.
-Both of these events will translate to <em>symbolDependenciesChanged</em> event
-in the end. When <em>symbolDependenciesChanged</em> is fired, if the worker is
-on <em>Idle</em> state, it will move to <em>Coalescing</em> state. If the worker was
-already working on a tile and <em>symbolDependenciesChanged</em> is fired in
-the middle, it will move to <em>NeedsSymbolLayout</em> state.</p>
-<h2 id="restart-a-worker-in-progress-needsparse-and-needssymbollayout-state"><a class="header" href="#restart-a-worker-in-progress-needsparse-and-needssymbollayout-state">Restart a worker in-progress: NeedsParse and NeedsSymbolLayout state</a></h2>
-<p>The logical question to ask right now is why does the worker have
-<em>NeedSymbolLayout</em> and <em>NeedsParse</em> state at all? Based on what we have
-seen so far, parsing and fetching symbols (glyphs, images) can be done
-in <em>Coalescing</em> state. This is to distinguish incremental changes
-introduced while the worker is already working on something. This was to
-facilitate a reset of current work and force the worker to <em>parse</em> and
-<em>fetch</em> symbols again from the <em>Coalescing</em> state. If we look back to
-Figure 8 now, we will see that <em>Coalescing</em> state goes to
-<em>NeedsSymbolLayout</em> if a symbol update (glyphs, images) has been
-encountered. <em>NeedsSymbolLayout</em> state will go to <em>NeedsParse</em> state
-with a <em><strong>set</strong></em> method invocation after updating the symbols.
-<em>Coalescing</em> state will go straight to <em>NeedsParse</em> state if only
-incremental data or layer change is introduced with a <em><strong>set</strong></em> method
-invocation.</p>
-<p>To summarize, restarting an in-progress <em>worker</em> requires:</p>
-<ol>
-<li>
-<p>Send <em>symbolDependenciesChanged</em> through <em>onImagesAvailable</em> or
-<em>onGlyphsAvailable event.</em> To re-emphasize, these are not messages
-passed to the worker, rather events invoked through methods.</p>
-</li>
-<li>
-<p>This will interrupt old parsing process and issue a new <em><strong>set</strong></em>
-method to re-parse data from <em>NeedsSymbolLayout</em> or <em>Coalescing</em>
-state. In both cases, the worker will end up in <em>NeedsParse</em> state
-to re-parse.</p>
-</li>
-</ol>
-<p><em>setShowCollisionBoxes</em> event works in similar fashion. This event is
-used to show text label collision boxes in the to-be-rendered tile. It
-is used for debugging collision detection of text labels.</p>
-<h2 id="finalization"><a class="header" href="#finalization">Finalization</a></h2>
-<p>A worker finalizes its work when all required data is parsed, and all
-symbols are loaded in a layout.</p>
-<p>A <em><strong>Symbol Layout</strong></em> is the process of turning raw features into OpenGL
-buffers ready to be rendered. To simplify, a <em>symbol layout</em> contains
-images, glyphs, and their collision metadata positions relative to the
-tile to be rendered.</p>
-<p>When a geometry tile worker has completed its work, it moves to <em>Idle</em>
-state by self-sending <em>coalesced</em> transition. Reiterating again, to
-consider the worker has coalesced, it has to <em>parse</em> all the <em>coalesced</em>
-data from available messages in the queue for a particular tile.</p>
-<hr>
-<hr>
-<ol class="footnote-definition">
-<li id="footnote-21">
-<p>This is not entirely true. Going forward this section will shed
-some light on <em>why.</em> For the time being, the assumption accelerates
-understanding. <a href="#fr-21-1">↩</a></p>
-</li>
-<li id="footnote-22">
-<p>In reality, <em>onGlyphsAvailable</em> and <em>onImagesAvailable</em> events
-will be fired from GlyphManager and ImageManger instances. For
-brevity, this document does not speak of these classes. <a href="#fr-22-1">↩</a></p>
-</li>
-</ol>
+                        <h1 id="building-with-microsoft-visual-studio"><a class="header" href="#building-with-microsoft-visual-studio">Building with Microsoft Visual Studio</a></h1>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>The build was tested with <code>Microsoft Visual Studio 2022</code>. Earlier versions are not guaranteed to work, but <code>Microsoft Visual Studio 2019</code> might work as well.</p>
+<p>To install the required Visual Studio components, open Visual Studio Installer and check <code>Desktop Development with C++</code> option. Make sure <code>C++ CMake tools for Windows</code> is selected in the right pane. If <code>git</code> is not already installed, select <code>Git for Windows</code> option in <code>Individual Components</code>. When Visual Studio finishes the install process, everything is ready to start.</p>
+<h2 id="downloading-sources"><a class="header" href="#downloading-sources">Downloading sources</a></h2>
+<p>Open <code>x64 Native Tools Command Prompt for VS 2022</code> and then clone the repository:</p>
+<pre><code class="language-cmd">git clone --config core.longpaths=true --depth 1 --recurse-submodules -j8 https://github.com/maplibre/maplibre-native.git
+cd maplibre-native
+</code></pre>
+<blockquote class="blockquote-tag blockquote-tag-note">
+<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>Note</p>
+<p>The <code>core.longpaths=true</code> config is necessary, because without it a lot of <code>Filename too long</code> messages will come. If you have this configuration set globally (<code>git config --system core.longpaths=true</code>), you can omit the <code>--config core.longpaths=true</code> portion of the clone command.</p>
+</blockquote>
+<h2 id="configuring"><a class="header" href="#configuring">Configuring</a></h2>
+<p>Configure the build with the following command, replacing <code>&lt;preset&gt;</code> with <code>opengl</code>, <code>egl</code> or <code>vulkan</code>, which are the rendering engines you can use. If you don’t know which one to choose, just use <code>opengl</code>:</p>
+<pre><code class="language-cmd">cmake --preset windows-&lt;preset&gt;
+</code></pre>
+<p>It will take some time to build and install all components on which Maplibre depends.</p>
+<h2 id="building"><a class="header" href="#building">Building</a></h2>
+<p>Finally, build the project with the following command, again replacing <code>&lt;preset&gt;</code> with the value you choose in the configure step:</p>
+<pre><code class="language-cmd">cmake --build build-windows-&lt;preset&gt;
+</code></pre>
+<h2 id="building-with-microsoft-visual-studio-1"><a class="header" href="#building-with-microsoft-visual-studio-1">Building with Microsoft Visual Studio</a></h2>
+<p>Just add the <code>-G "Microsoft Visual Studio 17 2022"</code> (or the corresponding Visual Studio version you have) option from the configure command:</p>
+<pre><code class="language-cmd">cmake --preset windows-&lt;preset&gt; -G "Microsoft Windows 2022"
+</code></pre>
+<p>Once configure is done, open the file <code>build-windows-&lt;preset&gt;\MapLibre Native.sln</code>. Build the target <code>ALL_BUILD</code> to build all targets, or pick a specific target. Don’t forget to pick a build configuration (<code>Release</code>, <code>RelWithDebInfo</code>, <code>MinSizeRel</code> or <code>Debug</code>), otherwise the project will be built with default configuration (<code>Debug</code>).</p>
+<h2 id="testing"><a class="header" href="#testing">Testing</a></h2>
+<p>If all went well and target <code>mbgl-render</code> or <code>ALL_BUILD</code> was chosen, there should now be a <code>build-windows-&lt;preset&gt;\bin\mbgl-render.exe</code> binary that you can run to generate map tile images. To test that it is working properly, run the following command.</p>
+<pre><code class="language-cmd">.\build-windows-&lt;preset&gt;\bin\mbgl-render.exe --style https://raw.githubusercontent.com/maplibre/demotiles/gh-pages/style.json --output out.png
+</code></pre>
+<p>This should produce an <code>out.png</code> map tile image with the default MapLibre styling from <a href="https://maplibre.org/maplibre-gl-js/docs/examples/display-a-map/">the MapLibre demo</a>.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/sample-maplibre-style-mbgl-render-out.png" alt="Sample image of world from mbgl-render command"><span class="img-wrapper"><img src="images/sample-maplibre-style-mbgl-render-out.png" alt="Sample image of world from mbgl-render command"></span></label></p>
+<h3 id="using-your-own-styletiles"><a class="header" href="#using-your-own-styletiles">Using your own style/tiles</a></h3>
+<p>You can also use the <code>mbgl-render</code> command to render images from your own style or tile set. To do so, you will need a data source and a style JSON file.</p>
+<p>For the purposes of this exercise, you can use the <code>zurich_switzerland.mbtiles</code> from <a href="https://github.com/acalcutt/tileserver-gl/releases/download/test_data/zurich_switzerland.mbtiles">here</a>, and the following <code>style.json</code> file.</p>
+<pre><code class="language-json">{
+  "version": 8,
+  "name": "Test style",
+  "center": [
+    8.54806714892635,
+    47.37180823552663
+  ],
+  "sources": {
+    "test": {
+      "type": "vector",
+      "url": "mbtiles:///path/to/zurich_switzerland.mbtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "hsl(47, 26%, 88%)"
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "test",
+      "source-layer": "water",
+      "filter": [
+        "==",
+        "$type",
+        "Polygon"
+      ],
+      "paint": {
+        "fill-color": "hsl(205, 56%, 73%)"
+      }
+    },
+    {
+      "id": "admin_country",
+      "type": "line",
+      "source": "test",
+      "source-layer": "boundary",
+      "filter": [
+        "all",
+        [
+          "&lt;=",
+          "admin_level",
+          2
+        ],
+        [
+          "==",
+          "$type",
+          "LineString"
+        ]
+      ],
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "hsla(0, 8%, 22%, 0.51)",
+        "line-width": {
+          "base": 1.3,
+          "stops": [
+            [
+              3,
+              0.5
+            ],
+            [
+              22,
+              15
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}
+</code></pre>
+<p>Note that this style is totally inadequate for any real use beyond testing your custom setup. Don’t forget to replace the source URL <code>"mbtiles:///path/to/zurich_switzerland.mbtiles"</code> with the actual path to your mbtiles file.</p>
+<p>From your <code>maplibre-native</code> dir, run the following command.</p>
+<pre><code class="language-cmd">.\build-windows-&lt;preset&gt;\bin\mbgl-render.exe --style path\to\style.json --output out.png
+</code></pre>
+<p>This should produce an <code>out.png</code> image in your current directory with a barebones image of the world.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/sample-barebones-mbgl-render-out.png" alt="Sample image of world from mbgl-render command"><span class="img-wrapper"><img src="images/sample-barebones-mbgl-render-out.png" alt="Sample image of world from mbgl-render command"></span></label></p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../design/android-map-rendering-data-flow.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../platforms/windows/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="../profiling/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../platforms/windows/build-msys2.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -334,11 +350,11 @@ brevity, this document does not speak of these classes. <a href="#fr-22-1">↩</
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../design/android-map-rendering-data-flow.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../platforms/windows/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="../profiling/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../platforms/windows/build-msys2.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
@@ -358,13 +374,13 @@ brevity, this document does not speak of these classes. <a href="#fr-22-1">↩</
         </script>
 
 
-        <script src="../elasticlunr-ef4e11c1.min.js"></script>
-        <script src="../mark-09e88c2c.min.js"></script>
-        <script src="../searcher-09f2665d.js"></script>
+        <script src="../../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../../mark-09e88c2c.min.js"></script>
+        <script src="../../searcher-09f2665d.js"></script>
 
-        <script src="../clipboard-1626706a.min.js"></script>
-        <script src="../highlight-abc7f01d.js"></script>
-        <script src="../book-609e4cb8.js"></script>
+        <script src="../../clipboard-1626706a.min.js"></script>
+        <script src="../../highlight-abc7f01d.js"></script>
+        <script src="../../book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
 
