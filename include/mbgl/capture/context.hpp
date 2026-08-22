@@ -103,7 +103,7 @@ public:
     void setFrameProjection(const std::array<double, 16>& projMatrix);
 
     /// Record the camera that projection describes. See FrameOrder::worldCenter.
-    void setFrameCamera(const std::array<double, 2>& worldCenter, double bearing, double pitch);
+    void setFrameCamera(const std::array<double, 2>& worldCenter, double bearing, double pitch, double pixelsPerMeter);
 
     /// Record the style's light. See FrameOrder::Light.
     void setFrameLight(const FrameOrder::Light& light);

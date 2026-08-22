@@ -259,6 +259,21 @@ struct FrameOrder {
     double bearing = 0.0;
     double pitch = 0.0;
 
+    /// World pixels per meter at this zoom and latitude.
+    ///
+    /// A consumer that owns the camera needs this and cannot get it from the projection.
+    /// mbgl's own matrix is not isotropic: `Camera::getWorldToCamera` scales the z column by
+    /// this factor, because a renderable's height (fill-extrusion, and anything else measured
+    /// in the world rather than on the map) arrives in **meters** while its x and y are in
+    /// world pixels. Bake it into the projection, as mbgl does, and heights come out right
+    /// without the geometry ever being touched.
+    ///
+    /// A consumer placing the map's geometry in a shared 3D world will usually want it in the
+    /// tile placement instead, so that world isotropic -- x, y and z all in world pixels --
+    /// which is what lets a model be positioned in the same units on every axis. Either way
+    /// it has to be applied somewhere, and leaving it out makes buildings too tall by 1/this.
+    double pixelsPerMeter = 1.0;
+
     /// The style's light -- the sun.
     ///
     /// mbgl uses this only for fill-extrusion, where it shades faces by

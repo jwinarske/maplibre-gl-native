@@ -337,7 +337,16 @@ void Drawable::draw(PaintParameters& parameters) const {
     // consumer owning the camera need not decompose the projection to find it.
     const auto& state = parameters.state;
     const auto center = Projection::project(state.getLatLng(LatLng::Unwrapped), state.getScale());
-    ctx.setFrameCamera({center.x, center.y}, util::rad2deg(state.getBearing()), util::rad2deg(state.getPitch()));
+    // Latitude of the map center, which is what mbgl's own axonometric branch uses for this
+    // (transform_state.cpp:185). Camera::getWorldToCamera derives the same quantity from the
+    // *camera's* latitude instead; the two differ only when a pitched camera has swung far
+    // enough from the center for the latitudes to disagree, and the difference is a cosine at
+    // second order. Worth knowing if extrusion heights ever look wrong at high latitude under
+    // heavy pitch.
+    const double pixelsPerMeter = 1.0 / Projection::getMetersPerPixelAtLatitude(state.getLatLng().latitude(),
+                                                                                state.getZoom());
+    ctx.setFrameCamera(
+        {center.x, center.y}, util::rad2deg(state.getBearing()), util::rad2deg(state.getPitch()), pixelsPerMeter);
 
     // The style's sun, evaluated. mbgl keeps the position in spherical coordinates and
     // converts on assignment, so this is the direction towards the light.

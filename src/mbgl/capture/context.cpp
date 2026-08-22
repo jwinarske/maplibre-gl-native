@@ -245,10 +245,14 @@ void Context::setFrameProjection(const std::array<double, 16>& projMatrix) {
     pendingOrder.projMatrix = projMatrix;
 }
 
-void Context::setFrameCamera(const std::array<double, 2>& worldCenter, double bearing, double pitch) {
+void Context::setFrameCamera(const std::array<double, 2>& worldCenter,
+                             double bearing,
+                             double pitch,
+                             double pixelsPerMeter) {
     pendingOrder.worldCenter = worldCenter;
     pendingOrder.bearing = bearing;
     pendingOrder.pitch = pitch;
+    pendingOrder.pixelsPerMeter = pixelsPerMeter;
 }
 
 void Context::setFrameLight(const FrameOrder::Light& light) {
