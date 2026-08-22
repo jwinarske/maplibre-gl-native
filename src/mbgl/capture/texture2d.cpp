@@ -193,7 +193,9 @@ void Texture2D::flush() {
                                                   .size = size,
                                                   .format = pixelFormat,
                                                   .contentHash = contentHash(pixels),
-                                                  .dirtyRect = dirtyRect});
+                                                  .dirtyRect = dirtyRect,
+                                                  .pixels = pixels.data(),
+                                                  .pixelBytes = pixels.size()});
     dirtyRect.reset();
 }
 

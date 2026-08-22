@@ -126,6 +126,16 @@ std::uint64_t Drawable::contentSignature() const {
 }
 
 void Drawable::upload(gfx::UploadPass&) {
+    // Textures are staged by the layer (setImage) and only actually uploaded here -- the real
+    // backends do the same from their drawable upload pass (vulkan/drawable.cpp
+    // uploadTextures). Skipping it means a raster tile's pixels never leave mbgl and the
+    // consumer sees a drawable referencing a texture that was never filled.
+    for (const auto& texture : textures) {
+        if (texture && texture->needsUpload()) {
+            texture->upload();
+        }
+    }
+
     // Re-announcement is decided by content, deliberately NOT by whether a setter ran.
     //
     // `RenderFillLayer::update` calls `updateVertexAttributes()` unconditionally on every

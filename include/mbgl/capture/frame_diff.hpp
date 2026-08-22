@@ -154,6 +154,12 @@ struct TextureUpdate {
     std::uint64_t contentHash = 0;
     /// Sub-region updated, or nullopt for a whole-texture upload.
     std::optional<Rect<uint16_t>> dirtyRect;
+
+    /// BORROWED, like `UboUpdate::data`: points at the capture texture's own storage and is
+    /// valid only for the duration of the `onTextureUpdate` call. A consumer that uploads
+    /// asynchronously must copy first -- the next atlas insert rewrites this in place.
+    const void* pixels = nullptr;
+    std::size_t pixelBytes = 0;
 };
 
 /// The tile set a layer group wants clipped. mbgl never produces clipping-mask *drawables* on
