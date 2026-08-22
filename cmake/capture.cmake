@@ -50,6 +50,7 @@ list(APPEND
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/frame_diff.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/layer_group.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/renderer_backend.cpp
+        ${PROJECT_SOURCE_DIR}/src/mbgl/capture/dynamic_texture.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/texture2d.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/uniform_buffer.cpp
 )

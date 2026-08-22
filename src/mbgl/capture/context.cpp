@@ -1,5 +1,7 @@
 #include <mbgl/capture/context.hpp>
 
+#include <mbgl/capture/dynamic_texture.hpp>
+
 #include "command_encoder.hpp"
 #include <mbgl/capture/drawable_builder.hpp>
 #include <mbgl/capture/layer_group.hpp>
@@ -137,8 +139,9 @@ gfx::Texture2DPtr Context::createTexture2D() {
 }
 
 gfx::DynamicTexturePtr Context::createDynamicTexture(Size size, gfx::TexturePixelType pixelType) {
-    // gfx::DynamicTexture is generic; it drives our Texture2D through the shelf packer.
-    return std::make_shared<gfx::DynamicTexture>(*this, size, pixelType);
+    // Not gfx::DynamicTexture: its uploadImage is a no-op that discards pixel data, so the
+    // shelf packer would allocate an atlas and every glyph written to it would be dropped.
+    return std::make_shared<DynamicTexture>(*this, size, pixelType);
 }
 
 RenderTargetPtr Context::createRenderTarget(Size size, gfx::TextureChannelDataType type) {
