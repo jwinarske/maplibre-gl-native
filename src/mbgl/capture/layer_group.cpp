@@ -6,6 +6,7 @@
 #include <mbgl/gfx/upload_pass.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/renderer/render_tile.hpp>
+#include <mbgl/util/convert.hpp>
 
 namespace mln {
 namespace capture {
@@ -108,7 +109,11 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
         st.layerIndex = getLayerIndex();
         st.tiles.reserve(stencilTiles->size());
         for (const auto& tileRef : *stencilTiles) {
-            st.tiles.push_back(tileRef.get().getOverscaledTileID());
+            const auto& tile = tileRef.get();
+            // matrixForTile takes the unwrapped id, and the overscaled one identifies the tile
+            // to the consumer -- the same pair mbgl itself works in.
+            st.tiles.push_back(StencilTile{.id = tile.getOverscaledTileID(),
+                                           .matrix = util::cast<float>(parameters.matrixForTile(tile.id))});
         }
         context.recordStencilTiles(std::move(st));
     }

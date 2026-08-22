@@ -7,6 +7,7 @@
 #include <mbgl/util/rect.hpp>
 #include <mbgl/util/size.hpp>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -183,13 +184,32 @@ struct TextureUpdate {
     std::size_t pixelBytes = 0;
 };
 
+/// One tile of a clip set: which tile, and the matrix that puts its mask quad on screen.
+///
+/// The matrix is `PaintParameters::matrixForTile`, the same call every backend's
+/// `renderTileClippingMasks` makes when it fills `shaders::ClipUBO`. It has to travel with the
+/// tile because the consumer draws the quad itself and has nothing else to derive it from --
+/// in particular *not* a content drawable's own matrix, which carries the layer's translate on
+/// top of the tile transform and would put the mask somewhere the content is not.
+struct StencilTile {
+    OverscaledTileID id;
+    /// Column-major tile-to-clip, as every other matrix on this protocol is.
+    std::array<float, 16> matrix{};
+};
+
 /// The tile set a layer group wants clipped. mbgl never produces clipping-mask *drawables* on
 /// any backend we use — `PaintParameters::renderTileClippingMasks` calls into the concrete
 /// backend Context directly — so the consumer synthesizes the masks from this. Plan §3.4.1.
+///
+/// Stencil *reference values* are deliberately not carried. mbgl assigns them from a running
+/// counter it resets when the value would overflow the buffer, which is bookkeeping about a
+/// stencil buffer this side does not own. The consumer assigns its own and keys them by
+/// `DrawableAdd::tileID`, which is the same mapping mbgl makes at draw time
+/// (`vulkan/drawable.cpp:331` looks the mode up by `tileID->toUnwrapped()`).
 struct StencilTiles {
     MapID mapId = 0;
     std::int32_t layerIndex = 0;
-    std::vector<OverscaledTileID> tiles;
+    std::vector<StencilTile> tiles;
 };
 
 /// One drawable's position in the frame's painter order, recorded at `draw()` time.
