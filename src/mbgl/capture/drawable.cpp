@@ -336,7 +336,9 @@ void Drawable::draw(PaintParameters& parameters) const {
     // The camera behind that matrix, in the same world units the tile placement uses, so a
     // consumer owning the camera need not decompose the projection to find it.
     const auto& state = parameters.state;
-    const auto center = Projection::project(state.getLatLng(LatLng::Unwrapped), state.getScale());
+    // Scale 1, not the map's: the center goes out scale-free so a consumer can multiply it by
+    // the same zoom it places tiles with. See FrameOrder::centerZoom0 for why that matters.
+    const auto center = Projection::project(state.getLatLng(LatLng::Unwrapped), 1.0);
     // Latitude of the map center, which is what mbgl's own axonometric branch uses for this
     // (transform_state.cpp:185). Camera::getWorldToCamera derives the same quantity from the
     // *camera's* latitude instead; the two differ only when a pitched camera has swung far

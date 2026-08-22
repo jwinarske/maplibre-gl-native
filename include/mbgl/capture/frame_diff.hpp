@@ -252,10 +252,25 @@ struct FrameOrder {
     /// decomposing a combined view-projection, and a consumer that instead assumes the map
     /// sits at the world's center is right only until someone pans.
     ///
-    /// `worldCenter` is the map center in the same world units the tile placement uses --
+    /// `centerZoom0` is the map center at zoom zero -- `Projection::project(center, 1.0)`, so
+    /// 0..512 regardless of the map's zoom. **Scale-free on purpose.**
+    ///
+    /// It used to be sent in world units, already multiplied by the zoom's scale, and that
+    /// coupled it to a particular frame's zoom. A consumer placing tiles derives world units
+    /// from `map_zoom` in the paint params; if its camera came from a frame whose zoom
+    /// differed even slightly, the two disagreed by the difference in scale -- which at zoom
+    /// 17 is over a million units for a tenth of a zoom level. The camera then looked
+    /// somewhere the tiles were not and the frame came back empty. Standing still the two
+    /// agree, so it appeared only while zooming, as whole frames flickering.
+    ///
+    /// Sent scale-free, a consumer multiplies by the same `map_zoom` it places tiles with, and
+    /// the two cannot disagree about scale whatever they disagree about in time.
+    ///
+    /// Historic note: `worldCenter` was the map center in the same world units tile placement
+    /// uses --
     /// `Projection::project(center, scale)`, so it lands in 0..worldSize. Bearing and pitch
     /// are degrees, as mbgl's own CameraOptions carry them.
-    std::array<double, 2> worldCenter{};
+    std::array<double, 2> centerZoom0{};
     double bearing = 0.0;
     double pitch = 0.0;
 
