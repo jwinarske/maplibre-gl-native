@@ -244,6 +244,20 @@ struct FrameOrder {
     /// Column-major and double, as mbgl keeps it -- the world coordinates it multiplies are
     /// large enough at high zoom that the precision matters.
     std::array<double, 16> projMatrix{};
+
+    /// The camera the matrix above describes, in terms a consumer can rebuild it from.
+    ///
+    /// Carried because a consumer that owns the camera cannot get these anywhere else. The
+    /// projection alone is not enough: recovering position and orientation from it means
+    /// decomposing a combined view-projection, and a consumer that instead assumes the map
+    /// sits at the world's center is right only until someone pans.
+    ///
+    /// `worldCenter` is the map center in the same world units the tile placement uses --
+    /// `Projection::project(center, scale)`, so it lands in 0..worldSize. Bearing and pitch
+    /// are degrees, as mbgl's own CameraOptions carry them.
+    std::array<double, 2> worldCenter{};
+    double bearing = 0.0;
+    double pitch = 0.0;
 };
 
 /// Consumer of the capture stream. Phase 0 ships `LogFrameSink`; later phases swap in the

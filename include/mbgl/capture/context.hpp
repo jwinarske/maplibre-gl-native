@@ -102,6 +102,9 @@ public:
     /// Record the frame's world -> clip matrix. See FrameOrder::projMatrix.
     void setFrameProjection(const std::array<double, 16>& projMatrix);
 
+    /// Record the camera that projection describes. See FrameOrder::worldCenter.
+    void setFrameCamera(const std::array<double, 2>& worldCenter, double bearing, double pitch);
+
     const ContextRef& ref() const noexcept { return selfRef; }
 
     /// Textures accumulate dirty regions and are flushed once per frame rather than on every

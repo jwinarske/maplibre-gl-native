@@ -8,6 +8,8 @@
 #include <mbgl/gfx/vertex_attribute.hpp>
 #include <mbgl/gfx/vertex_vector.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
+#include <mbgl/math/angles.hpp>
+#include <mbgl/util/projection.hpp>
 #include <mbgl/shaders/segment.hpp>
 #include <mbgl/util/hash.hpp>
 #include <mbgl/util/monotonic_timer.hpp>
@@ -330,6 +332,11 @@ void Drawable::draw(PaintParameters& parameters) const {
     // place with `parameters` in hand per frame. Every tile's matrix is this times a per-tile
     // placement; carrying the factors apart is what lets a consumer own the camera. Plan §5.
     ctx.setFrameProjection(parameters.transformParams.projMatrix);
+    // The camera behind that matrix, in the same world units the tile placement uses, so a
+    // consumer owning the camera need not decompose the projection to find it.
+    const auto& state = parameters.state;
+    const auto center = Projection::project(state.getLatLng(LatLng::Unwrapped), state.getScale());
+    ctx.setFrameCamera({center.x, center.y}, util::rad2deg(state.getBearing()), util::rad2deg(state.getPitch()));
 
     // Emit whatever the tweakers just rewrote, dirty-only.
     const auto& ubos = uniformBuffers;

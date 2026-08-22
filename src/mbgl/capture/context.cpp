@@ -245,5 +245,11 @@ void Context::setFrameProjection(const std::array<double, 16>& projMatrix) {
     pendingOrder.projMatrix = projMatrix;
 }
 
+void Context::setFrameCamera(const std::array<double, 2>& worldCenter, double bearing, double pitch) {
+    pendingOrder.worldCenter = worldCenter;
+    pendingOrder.bearing = bearing;
+    pendingOrder.pitch = pitch;
+}
+
 } // namespace capture
 } // namespace mln
