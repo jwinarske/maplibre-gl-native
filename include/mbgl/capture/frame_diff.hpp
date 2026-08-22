@@ -52,6 +52,12 @@ struct AttributeDesc {
 
     /// Element count when `sharedVector` is null.
     std::size_t rawCount = 0;
+
+    /// Owned vertex bytes for the raw-vertex path. The background layer is the one mainline
+    /// user: it builds its quad on the CPU and hands the bytes over with `setRawVertices`,
+    /// naming the attribute they feed, rather than referencing a bucket vector. Shared so the
+    /// consumer can retain it for as long as the GPU needs it.
+    std::shared_ptr<const std::vector<std::uint8_t>> rawData;
 };
 
 /// One draw segment: a contiguous index range with its own vertex base.
@@ -87,6 +93,10 @@ struct DrawableAdd {
     std::uint64_t permutationKey = 0;
 
     std::optional<OverscaledTileID> tileID;
+
+    /// Index of the layer group that owns this drawable. Pairs with `UboUpdate::layerIndex`
+    /// so a consumer can find the consolidated UBO array this drawable indexes into.
+    std::int32_t layerIndex = -1;
 
     std::vector<AttributeDesc> attrs;
     std::vector<AttributeDesc> instanceAttrs;

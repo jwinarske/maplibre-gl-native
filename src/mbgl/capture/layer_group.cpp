@@ -14,9 +14,14 @@ namespace {
 
 template <typename Group>
 void uploadDrawables(Group& group, gfx::UploadPass& uploadPass) {
+    const auto layerIndex = group.getLayerIndex();
     group.visitDrawables([&](gfx::Drawable& drawable) {
         if (drawable.getEnabled()) {
-            static_cast<Drawable&>(drawable).upload(uploadPass);
+            auto& captured = static_cast<Drawable&>(drawable);
+            // Stamp before upload: the announcement has to name the layer group whose
+            // consolidated UBO array carries this drawable's slice.
+            captured.setOwningLayerIndex(layerIndex);
+            captured.upload(uploadPass);
         }
     });
 }

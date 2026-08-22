@@ -30,9 +30,17 @@ Drawable::~Drawable() {
 }
 
 void Drawable::setVertices(std::vector<uint8_t>&& data, std::size_t count, gfx::AttributeDataType type_) {
-    // Layers call this with an empty vector — count and type only — and supply the real
-    // geometry through the vertex attribute array. Only custom-drawable layers pass bytes.
-    rawVertices = std::move(data);
+    // Two callers, two shapes. Most layers pass an empty vector -- count and type only --
+    // and supply the geometry through the vertex attribute array as shared bucket vectors.
+    // The background layer instead builds its quad on the CPU and passes the bytes here,
+    // naming the attribute they feed via the builder's `vertexAttrId`
+    // (render_background_layer.cpp:220-223). Both have to reach the consumer; assuming only
+    // the first existed is why background arrived with no position at all.
+    //
+    // Kept as a shared block so the consumer can retain it without another copy; the real
+    // backends instead stuff it into the vertex attribute array at `vertexAttrId`, which is
+    // the same information reshaped.
+    rawVertices = data.empty() ? nullptr : std::make_shared<std::vector<std::uint8_t>>(std::move(data));
     vertexCount = count;
     vertexType = type_;
 }
@@ -71,6 +79,7 @@ std::uint64_t Drawable::contentSignature() const {
     util::hash_combine(seed, reinterpret_cast<std::uintptr_t>(indexes.get()));
     util::hash_combine(seed, vertexCount);
     util::hash_combine(seed, static_cast<int>(vertexType));
+    util::hash_combine(seed, reinterpret_cast<std::uintptr_t>(rawVertices.get()));
     util::hash_combine(seed, reinterpret_cast<std::uintptr_t>(getShader().get()));
     util::hash_combine(seed, segments.size());
     for (const auto& seg : segments) {
@@ -184,6 +193,7 @@ void Drawable::emitAdd(AddReason reason) const {
     add.enableColor = getEnableColor();
     add.renderPass = static_cast<std::uint8_t>(mln::underlying_type(getRenderPass()));
     add.subLayerIndex = getSubLayerIndex();
+    add.layerIndex = owningLayerIndex;
 
     if (const auto& shaderBase = getShader()) {
         if (const auto* captured = static_cast<const ShaderProgram*>(shaderBase.get())) {
@@ -247,6 +257,27 @@ void Drawable::emitAdd(AddReason reason) const {
             out.push_back(std::move(desc));
         }
     };
+    // The raw-vertex path never reaches the attribute array on this backend, so surface it as
+    // the attribute it feeds. Without this the background layer arrives with no position.
+    //
+    // Guarded against the array also holding that id: emitting two descriptors for one
+    // attribute would have the consumer bind the same shader slot twice, which Filament
+    // rejects. The real backends merge the two by writing the bytes into the array instead.
+    const bool rawIdAlreadyPresent = getVertexAttributes() && getVertexAttributes()->get(vertexAttrId) != nullptr;
+    if (rawVertices && !rawVertices->empty() && !rawIdAlreadyPresent) {
+        AttributeDesc desc;
+        desc.attrId = vertexAttrId;
+        desc.dataType = vertexType;
+        desc.rawCount = vertexCount;
+        desc.rawData = rawVertices;
+        if (shaderAttrs) {
+            if (const auto& declaredAttr = shaderAttrs->get(vertexAttrId)) {
+                desc.index = declaredAttr->getIndex();
+            }
+        }
+        add.attrs.push_back(std::move(desc));
+    }
+
     collect(getVertexAttributes(), shaderAttrs, add.attrs);
     collect(getInstanceAttributes(), shaderInstanceAttrs, add.instanceAttrs);
 

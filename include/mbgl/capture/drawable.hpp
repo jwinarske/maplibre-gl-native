@@ -57,6 +57,14 @@ public:
     std::size_t getVertexCount() const noexcept { return vertexCount; }
     gfx::AttributeDataType getVertexType() const noexcept { return vertexType; }
 
+    /// Which vertex attribute the raw byte block feeds, from the builder. Mirrors what the
+    /// real backends do with `Drawable::Impl::vertexAttrId`.
+    void setVertexAttrId(std::size_t value) noexcept { vertexAttrId = value; }
+
+    /// Stamped by the owning layer group before upload, so `DrawableAdd` can name the layer
+    /// whose consolidated uniform buffer this drawable indexes into.
+    void setOwningLayerIndex(std::int32_t value) noexcept { owningLayerIndex = value; }
+
     /// 3D drawables get their depth/stencil mode assigned by the layer group before draw,
     /// mirroring the real backends (vulkan/tile_layer_group.cpp:104-113).
     void setDepthModeFor3D(const gfx::DepthMode& value);
@@ -75,8 +83,10 @@ private:
     std::vector<UniqueDrawSegment> segments;
     std::size_t vertexCount = 0;
     gfx::AttributeDataType vertexType = gfx::AttributeDataType::Invalid;
-    std::vector<std::uint8_t> rawVertices;
+    std::shared_ptr<std::vector<std::uint8_t>> rawVertices;
+    std::size_t vertexAttrId = 0;
 
+    std::int32_t owningLayerIndex = -1;
     mutable bool announced = false;
     mutable std::uint64_t announcedSignature = 0;
 };
