@@ -105,6 +105,9 @@ public:
     /// Record the camera that projection describes. See FrameOrder::worldCenter.
     void setFrameCamera(const std::array<double, 2>& worldCenter, double bearing, double pitch);
 
+    /// Record the style's light. See FrameOrder::Light.
+    void setFrameLight(const FrameOrder::Light& light);
+
     const ContextRef& ref() const noexcept { return selfRef; }
 
     /// Textures accumulate dirty regions and are flushed once per frame rather than on every

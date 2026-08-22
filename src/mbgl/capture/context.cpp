@@ -251,5 +251,9 @@ void Context::setFrameCamera(const std::array<double, 2>& worldCenter, double be
     pendingOrder.pitch = pitch;
 }
 
+void Context::setFrameLight(const FrameOrder::Light& light) {
+    pendingOrder.light = light;
+}
+
 } // namespace capture
 } // namespace mln

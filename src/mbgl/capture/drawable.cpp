@@ -9,6 +9,7 @@
 #include <mbgl/gfx/vertex_vector.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/math/angles.hpp>
+#include <mbgl/style/light_impl.hpp>
 #include <mbgl/util/projection.hpp>
 #include <mbgl/shaders/segment.hpp>
 #include <mbgl/util/hash.hpp>
@@ -337,6 +338,18 @@ void Drawable::draw(PaintParameters& parameters) const {
     const auto& state = parameters.state;
     const auto center = Projection::project(state.getLatLng(LatLng::Unwrapped), state.getScale());
     ctx.setFrameCamera({center.x, center.y}, util::rad2deg(state.getBearing()), util::rad2deg(state.getPitch()));
+
+    // The style's sun, evaluated. mbgl keeps the position in spherical coordinates and
+    // converts on assignment, so this is the direction towards the light.
+    const auto& evaluated = parameters.evaluatedLight;
+    const auto cartesian = evaluated.get<style::LightPosition>().getCartesian();
+    const auto& lightColor = evaluated.get<style::LightColor>();
+    ctx.setFrameLight(FrameOrder::Light{
+        .direction = {cartesian[0], cartesian[1], cartesian[2]},
+        .color = {lightColor.r, lightColor.g, lightColor.b, lightColor.a},
+        .intensity = evaluated.get<style::LightIntensity>(),
+        .anchoredToMap = evaluated.get<style::LightAnchor>() == style::LightAnchorType::Map,
+    });
 
     // Emit whatever the tweakers just rewrote, dirty-only.
     const auto& ubos = uniformBuffers;

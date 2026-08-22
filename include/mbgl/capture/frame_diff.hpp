@@ -258,6 +258,29 @@ struct FrameOrder {
     std::array<double, 2> worldCenter{};
     double bearing = 0.0;
     double pitch = 0.0;
+
+    /// The style's light -- the sun.
+    ///
+    /// mbgl uses this only for fill-extrusion, where it shades faces by
+    /// `dot(normal, light_position)` and hands the result to the fragment stage already
+    /// resolved (shaders/vulkan/fill_extrusion.hpp:126). So for the layers this protocol
+    /// mostly carries, it changes nothing: they are flat and their colors are final.
+    ///
+    /// It is carried anyway, because a consumer that puts the map in a world alongside its own
+    /// 3D content needs the two lit by the same sun -- a model on the map shaded by a light
+    /// pointing somewhere else than the style's is the giveaway that it was pasted on. Without
+    /// this a consumer can only reach the light through FillExtrusionPropsUBO, which exists
+    /// only when the style happens to have such a layer.
+    struct Light {
+        /// Direction *towards* the light, cartesian, as mbgl's Position::getCartesian gives it.
+        std::array<double, 3> direction{{0.0, 0.0, 1.0}};
+        std::array<double, 4> color{{1.0, 1.0, 1.0, 1.0}};
+        double intensity = 0.5;
+        /// True when the light is anchored to the map and so rotates with it; false when it is
+        /// anchored to the viewport and stays put as the map turns. mbgl's default is viewport.
+        bool anchoredToMap = false;
+    };
+    Light light;
 };
 
 /// Consumer of the capture stream. Phase 0 ships `LogFrameSink`; later phases swap in the
