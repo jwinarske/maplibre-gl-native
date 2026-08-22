@@ -41,7 +41,23 @@ struct AttributeDesc {
     /// the consumer. (Seen in practice: LineShader drawables carry a floor-width override
     /// that only the SDF variant declares.)
     int index = -1;
+    /// The type the *buffer* supplies.
     gfx::AttributeDataType dataType = gfx::AttributeDataType::Invalid;
+
+    /// The type the *shader* declares for this slot, which is not always the same thing and
+    /// is the one a binding must use.
+    ///
+    /// A shader always declares the zoom-interpolated width, because it has to handle a
+    /// property that varies with zoom: fill's color is `Float4`, a packed min/max pair mixed
+    /// by `color_t`. The binder only supplies both halves when the property is actually
+    /// interpolated (`PaintPropertyBinder::isInterpolated`); a `match` on a feature property
+    /// is per-feature but constant across zoom, so it supplies `Float2` and the tweaker sets
+    /// `color_t = 0`, leaving the shader reading `.xy` and never touching `.zw`.
+    ///
+    /// So the buffer legitimately carries fewer components than the attribute declares. Bind
+    /// the declared type with the supplied offset and stride; binding the supplied type gives
+    /// the shader a narrower attribute than it reads.
+    gfx::AttributeDataType declaredDataType = gfx::AttributeDataType::Invalid;
 
     /// Shared source buffer. Null when the attribute carries per-vertex values inline
     /// (`rawCount` elements) rather than referencing a bucket vector.

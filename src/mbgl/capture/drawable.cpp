@@ -249,9 +249,12 @@ void Drawable::emitAdd(AddReason reason) const {
             AttributeDesc desc;
             desc.attrId = id;
             desc.index = attr.getIndex();
-            if (desc.index < 0 && declared) {
+            if (declared) {
                 if (const auto& declaredAttr = declared->get(id)) {
-                    desc.index = declaredAttr->getIndex();
+                    if (desc.index < 0) {
+                        desc.index = declaredAttr->getIndex();
+                    }
+                    desc.declaredDataType = declaredAttr->getDataType();
                 }
             }
             desc.dataType = attr.getDataType();
@@ -283,6 +286,7 @@ void Drawable::emitAdd(AddReason reason) const {
         if (shaderAttrs) {
             if (const auto& declaredAttr = shaderAttrs->get(vertexAttrId)) {
                 desc.index = declaredAttr->getIndex();
+                desc.declaredDataType = declaredAttr->getDataType();
             }
         }
         add.attrs.push_back(std::move(desc));
