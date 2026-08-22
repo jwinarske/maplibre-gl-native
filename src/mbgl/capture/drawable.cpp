@@ -326,6 +326,10 @@ void Drawable::draw(PaintParameters& parameters) const {
                                   .drawPriority = getDrawPriority(),
                                   .uboIndex = getUBOIndex()});
     ctx.setFrameDepthInfo(parameters.opaquePassCutoff, parameters.depthRangeSize);
+    // The frame's world -> clip, recorded alongside the depth info because this is the one
+    // place with `parameters` in hand per frame. Every tile's matrix is this times a per-tile
+    // placement; carrying the factors apart is what lets a consumer own the camera. Plan §5.
+    ctx.setFrameProjection(parameters.transformParams.projMatrix);
 
     // Emit whatever the tweakers just rewrote, dirty-only.
     const auto& ubos = uniformBuffers;

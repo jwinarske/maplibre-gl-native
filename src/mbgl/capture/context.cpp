@@ -241,5 +241,9 @@ void Context::setFrameDepthInfo(std::uint32_t opaquePassCutoff, float depthRange
     pendingOrder.depthRangeSize = depthRangeSize;
 }
 
+void Context::setFrameProjection(const std::array<double, 16>& projMatrix) {
+    pendingOrder.projMatrix = projMatrix;
+}
+
 } // namespace capture
 } // namespace mln

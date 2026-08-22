@@ -99,6 +99,9 @@ public:
     void recordDraw(const DrawOrderEntry&);
     void setFrameDepthInfo(std::uint32_t opaquePassCutoff, float depthRangeSize);
 
+    /// Record the frame's world -> clip matrix. See FrameOrder::projMatrix.
+    void setFrameProjection(const std::array<double, 16>& projMatrix);
+
     const ContextRef& ref() const noexcept { return selfRef; }
 
     /// Textures accumulate dirty regions and are flushed once per frame rather than on every

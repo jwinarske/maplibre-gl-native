@@ -230,6 +230,20 @@ struct FrameOrder {
     std::vector<DrawOrderEntry> ordered;
     std::uint32_t opaquePassCutoff = 0;
     float depthRangeSize = 0.0f;
+
+    /// World -> clip for this frame: mbgl's own `TransformParameters::projMatrix`, which is
+    /// view and projection together.
+    ///
+    /// This is the half of the drawable matrix that does not vary per tile. mbgl builds every
+    /// tile's matrix as `projMatrix * matrixFor(tileID)` (paint_parameters.cpp:111-115), where
+    /// the second factor is a translate and a scale placing the tile in a world space all
+    /// tiles share. Phase A forwards only the product, which is why the mirror's camera has to
+    /// contribute nothing; carrying the factors separately is what lets a consumer put the
+    /// world on a real camera and place its own 3D content in the same space. See plan §5.
+    ///
+    /// Column-major and double, as mbgl keeps it -- the world coordinates it multiplies are
+    /// large enough at high zoom that the precision matters.
+    std::array<double, 16> projMatrix{};
 };
 
 /// Consumer of the capture stream. Phase 0 ships `LogFrameSink`; later phases swap in the
