@@ -61,4 +61,7 @@ list(APPEND
 if(NOT MLN_WITH_CORE_ONLY)
     add_executable(mbgl-capture-probe ${PROJECT_SOURCE_DIR}/bin/capture_probe.cpp)
     target_link_libraries(mbgl-capture-probe PRIVATE mbgl-core)
+    # --dump hashes vertex and index buffer contents, and the vector types that own them are
+    # internal headers rather than public API.
+    target_include_directories(mbgl-capture-probe PRIVATE ${PROJECT_SOURCE_DIR}/src)
 endif()
