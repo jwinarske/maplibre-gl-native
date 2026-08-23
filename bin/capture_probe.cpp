@@ -34,6 +34,7 @@
 #include <mbgl/gfx/vertex_vector.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cinttypes>
 #include <cstdio>
@@ -322,6 +323,49 @@ private:
         return h;
     }
 
+    /// Hashes an index buffer in a form that does not depend on triangle emission order.
+    ///
+    /// earcutr and earcut.hpp produce the *same* triangulation — measured, on a square with a
+    /// square hole: the same eight triangles, the same total area, and every one with the same
+    /// winding — but they emit those triangles in a different order once holes are involved.
+    /// Simple polygons, including concave ones, agree index-for-index.
+    ///
+    /// Emission order is not a property of the map. The triangles are independent, the
+    /// rendered result is identical, and nothing downstream depends on the sequence. Hashing
+    /// the raw buffer would therefore fail the diff on every polygon with a hole, for a
+    /// difference that means nothing, and it would look like a tessellation bug.
+    ///
+    /// So each triangle is rotated to start at its lowest index and the triangles are sorted.
+    /// Rotation preserves winding, which *is* a real property — a reversed triangle is
+    /// backface-culled — so a winding difference still fails, as it should. What is discarded
+    /// is exactly what carries no meaning.
+    static std::uint64_t canonicalIndexHash(const std::uint16_t* indices, std::size_t count) {
+        if (!indices || count == 0) {
+            return kFnvOffset;
+        }
+        // Not a triangle list. Nothing to canonicalize, so hash it as it stands.
+        if (count % 3 != 0) {
+            return hash(indices, count * sizeof(std::uint16_t));
+        }
+
+        std::vector<std::array<std::uint16_t, 3>> triangles;
+        triangles.reserve(count / 3);
+        for (std::size_t i = 0; i < count; i += 3) {
+            std::array<std::uint16_t, 3> tri{indices[i], indices[i + 1], indices[i + 2]};
+            // Rotate to lowest-first: removes the rotation ambiguity, keeps the winding.
+            const auto lowest = std::distance(tri.begin(), std::min_element(tri.begin(), tri.end()));
+            std::rotate(tri.begin(), tri.begin() + lowest, tri.end());
+            triangles.push_back(tri);
+        }
+        std::sort(triangles.begin(), triangles.end());
+
+        std::uint64_t h = kFnvOffset;
+        for (const auto& tri : triangles) {
+            h = hash(tri.data(), sizeof(tri), h);
+        }
+        return h;
+    }
+
     static std::string tileKey(const OverscaledTileID& id) {
         char buf[64];
         std::snprintf(buf,
@@ -387,7 +431,7 @@ DumpFrameSink::DrawableRecord DumpFrameSink::record(const capture::DrawableAdd& 
     out.enableColor = add.enableColor;
     if (add.indexes) {
         out.indexCount = add.indexes->elements();
-        out.indexHash = hash(add.indexes->data(), add.indexes->bytes());
+        out.indexHash = canonicalIndexHash(add.indexes->data(), add.indexes->elements());
     }
     for (const auto& attr : add.attrs) {
         out.attrs.push_back(attrRecord(attr));
