@@ -231,6 +231,14 @@ public:
 
     void dump(std::FILE* out) const;
 
+    /// Prints the actual vertex coordinates, for working out what the frontend should be
+    /// producing rather than guessing from a hash.
+    ///
+    /// Deliberately not part of the dump: a hash is what makes the golden file bounded and
+    /// diffable, and inlining every coordinate of a real style would make it neither. This is
+    /// a measurement tool, and it is what the tile-coordinate pipeline gets built against.
+    void dumpVertices(std::FILE* out) const;
+
 private:
     struct AttrRecord {
         std::size_t attrId = 0;
@@ -242,6 +250,8 @@ private:
         std::uint32_t stride = 0;
         std::size_t sourceCount = 0;
         std::uint64_t sourceHash = 0;
+        /// Raw bytes, kept only for --dump-vertices. Not hashed and not part of the dump.
+        std::vector<std::uint8_t> raw;
     };
 
     struct DrawableRecord {
@@ -404,13 +414,23 @@ DumpFrameSink::AttrRecord DumpFrameSink::attrRecord(const capture::AttributeDesc
     out.vertexOffset = desc.vertexOffset;
     out.stride = desc.stride;
     if (desc.sharedVector) {
+        // getRawSize() is sizeof(Vertex) -- the stride, not the total. Hashing it directly
+        // covered only the first vertex, which made every attribute hash in the dump far
+        // weaker than it looked: two buffers agreeing on their first vertex and differing
+        // everywhere after it hashed identically.
         out.sourceCount = desc.sharedVector->getRawCount();
-        out.sourceHash = hash(desc.sharedVector->getRawData(), desc.sharedVector->getRawSize());
+        const std::size_t bytes = desc.sharedVector->getRawSize() * desc.sharedVector->getRawCount();
+        out.sourceHash = hash(desc.sharedVector->getRawData(), bytes);
+        const auto* raw = static_cast<const std::uint8_t*>(desc.sharedVector->getRawData());
+        if (raw) {
+            out.raw.assign(raw, raw + bytes);
+        }
     } else if (desc.rawData) {
         // The background layer's owned-bytes path. Rev 2 folds both into one slab reference,
         // so the two are deliberately indistinguishable here.
         out.sourceCount = desc.rawCount;
         out.sourceHash = hash(desc.rawData->data(), desc.rawData->size());
+        out.raw = *desc.rawData;
     }
     return out;
 }
@@ -487,6 +507,33 @@ std::vector<std::pair<std::string, const DumpFrameSink::DrawableRecord*>> DumpFr
         }
     }
     return out;
+}
+
+void DumpFrameSink::dumpVertices(std::FILE* out) const {
+    for (const auto& [key, d] : keyed()) {
+        std::fprintf(out, "%s vertices=%zu\n", key.c_str(), d->vertexCount);
+        for (const auto& a : d->attrs) {
+            // Short2 is the position attribute: two int16 per vertex, stride 4.
+            const bool isShort2 = a.dataType == 9;
+            std::fprintf(out,
+                         "  attr id=%zu dt=%d count=%zu bytes=%zu%s\n",
+                         a.attrId,
+                         a.dataType,
+                         a.sourceCount,
+                         a.raw.size(),
+                         isShort2 ? " (position)" : "");
+            if (!isShort2 || a.raw.size() < 4) {
+                continue;
+            }
+            const auto* values = reinterpret_cast<const std::int16_t*>(a.raw.data());
+            const std::size_t pairs = a.raw.size() / 4;
+            std::fprintf(out, "   ");
+            for (std::size_t i = 0; i < pairs; ++i) {
+                std::fprintf(out, " (%d,%d)", values[i * 2], values[i * 2 + 1]);
+            }
+            std::fprintf(out, "\n");
+        }
+    }
 }
 
 void DumpFrameSink::dump(std::FILE* out) const {
@@ -806,7 +853,7 @@ int main(int argc, char* argv[]) {
     // the same camera.
     const std::string dumpPath = [&]() -> std::string {
         for (int i = 1; i < argc; ++i) {
-            if (std::strcmp(argv[i], "--dump") == 0) {
+            if (std::strcmp(argv[i], "--dump") == 0 || std::strcmp(argv[i], "--dump-vertices") == 0) {
                 return "-";
             }
             if (std::strncmp(argv[i], "--dump=", 7) == 0) {
@@ -816,6 +863,14 @@ int main(int argc, char* argv[]) {
         return {};
     }();
     const bool wantDump = !dumpPath.empty();
+    const bool wantVertices = [&] {
+        for (int i = 1; i < argc; ++i) {
+            if (std::strcmp(argv[i], "--dump-vertices") == 0) {
+                return true;
+            }
+        }
+        return false;
+    }();
     constexpr int kFrames = 8;
 
     // Data-driven paint properties should always materialize as vertex attributes or UBO
@@ -921,6 +976,10 @@ int main(int argc, char* argv[]) {
     }
 
     const auto& stats = sink.getStats();
+
+    if (wantVertices && observer.failure.empty()) {
+        dumpSink.dumpVertices(stdout);
+    }
 
     if (wantDump && observer.failure.empty()) {
         std::FILE* out = (dumpPath == "-") ? stdout : std::fopen(dumpPath.c_str(), "w");
