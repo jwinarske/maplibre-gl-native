@@ -239,6 +239,9 @@ public:
     /// a measurement tool, and it is what the tile-coordinate pipeline gets built against.
     void dumpVertices(std::FILE* out) const;
 
+    /// Replaces raw permutation keys with indices that do not depend on the build.
+    void assignPermutationIndices() const;
+
 private:
     struct AttrRecord {
         std::size_t attrId = 0;
@@ -260,6 +263,8 @@ private:
         std::string tile;
         int shader = 0;
         std::uint64_t permutationKey = 0;
+        /// Canonical index of `permutationKey`, assigned in `assignPermutationIndices`.
+        int permutationIndex = 0;
         std::size_t vertexCount = 0;
         int vertexType = 0;
         std::uint8_t renderPass = 0;
@@ -276,16 +281,41 @@ private:
 
         /// Sorts and diffs by what the drawable structurally is, so a content difference is a
         /// changed line rather than a reshuffle.
+        ///
+        /// The permutation appears as a canonical index rather than its raw key. The key is
+        /// `hash_combine(propertiesAsUniforms, programParameters.getDefinesHash())`, so its
+        /// value depends on how the engine was *built* and not on what the map contains: two
+        /// builds of the same commit with different CMake options produce different keys for
+        /// identical geometry. What is a protocol property is the grouping -- which drawables
+        /// need the same shader variant -- and an index preserves that while dropping the part
+        /// that is an artifact of the build.
         std::string structuralKey() const {
             char buf[256];
             std::snprintf(buf,
                           sizeof(buf),
-                          "L%05d.S%05d.%s.sh%04d.pk%016" PRIx64 ".v%08zu",
+                          "L%05d.S%05d.%s.sh%04d.pk%04d.v%08zu",
                           layerIndex,
                           subLayerIndex,
                           tile.c_str(),
                           shader,
-                          permutationKey,
+                          permutationIndex,
+                          vertexCount);
+            return buf;
+        }
+
+        /// The key this drawable sorts under, ignoring the permutation entirely.
+        ///
+        /// Used to number permutations deterministically: the numbering cannot be derived from
+        /// the raw keys, because their relative order is as arbitrary as their values.
+        std::string permutationFreeKey() const {
+            char buf[256];
+            std::snprintf(buf,
+                          sizeof(buf),
+                          "L%05d.S%05d.%s.sh%04d.v%08zu",
+                          layerIndex,
+                          subLayerIndex,
+                          tile.c_str(),
+                          shader,
                           vertexCount);
             return buf;
         }
@@ -490,6 +520,8 @@ std::uint64_t DumpFrameSink::DrawableRecord::contentHash() const {
 
 std::vector<std::pair<std::string, const DumpFrameSink::DrawableRecord*>> DumpFrameSink::keyed() const {
     std::vector<std::pair<std::string, const DrawableRecord*>> out;
+    assignPermutationIndices();
+
     // Group by structure, order within a group by content, then number them. Two drawables
     // that are structurally identical still need distinct stable names.
     std::map<std::string, std::vector<const DrawableRecord*>> groups;
@@ -507,6 +539,36 @@ std::vector<std::pair<std::string, const DumpFrameSink::DrawableRecord*>> DumpFr
         }
     }
     return out;
+}
+
+/// Numbers the permutations so the dump does not carry a build artifact.
+///
+/// The raw key is a hash over the shader's uniform-property set and the engine's compiled-in
+/// defines, so it changes when CMake options change and stays the same when the map does. The
+/// grouping it induces is what a consumer actually needs -- which drawables want the same shader
+/// variant -- and that survives renumbering.
+///
+/// Indices are assigned in order of the drawables' *permutation-free* key, because the raw keys
+/// cannot order themselves: their relative order is as arbitrary as their values, so numbering
+/// by sorted raw key would be stable within one build and meaningless across two.
+void DumpFrameSink::assignPermutationIndices() const {
+    std::map<std::string, std::uint64_t> firstByPosition;
+    for (const auto& [id, record] : drawables) {
+        firstByPosition.emplace(record.permutationFreeKey(), record.permutationKey);
+    }
+
+    std::map<std::uint64_t, int> indices;
+    int next = 0;
+    for (const auto& [position, key] : firstByPosition) {
+        if (indices.emplace(key, next).second) {
+            ++next;
+        }
+    }
+
+    for (auto& [id, record] : const_cast<std::map<std::int64_t, DrawableRecord>&>(drawables)) {
+        const auto found = indices.find(record.permutationKey);
+        record.permutationIndex = found == indices.end() ? -1 : found->second;
+    }
 }
 
 void DumpFrameSink::dumpVertices(std::FILE* out) const {
