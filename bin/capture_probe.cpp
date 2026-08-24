@@ -38,6 +38,7 @@
 #include <chrono>
 #include <cinttypes>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <map>
@@ -962,7 +963,21 @@ int main(int argc, char* argv[]) {
         Log::Info(Event::General, "probe: loading style " + styleArg);
     }
 
-    map.jumpTo(CameraOptions().withCenter(LatLng{51.505, -0.11}).withZoom(13.0));
+    // --zoom=<f> moves the camera off the default. A zoom-varying paint property is stored as
+    // its value at each end of the tile's zoom range and mixed by a `_t` uniform, and at an
+    // exactly integer zoom that mix factor is zero -- so every such uniform reads the same as a
+    // style with no zoom dependence at all. Capturing the mix factor at all requires a
+    // fractional zoom, which is what this exists for. The default is unchanged, so a capture
+    // without it is byte-identical to one from before the flag.
+    const double zoom = [&] {
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--zoom=", 7) == 0) {
+                return std::strtod(argv[i] + 7, nullptr);
+            }
+        }
+        return 13.0;
+    }();
+    map.jumpTo(CameraOptions().withCenter(LatLng{51.505, -0.11}).withZoom(zoom));
 
     int framesRendered = 0;
     int framesWithContent = 0;
