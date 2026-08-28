@@ -626,23 +626,34 @@ void DumpFrameSink::dumpVertices(std::FILE* out) const {
     for (const auto& [key, d] : keyed()) {
         std::fprintf(out, "%s vertices=%zu\n", key.c_str(), d->vertexCount);
         for (const auto& a : d->attrs) {
-            // Short2 is the position attribute: two int16 per vertex, stride 4.
+            // The signed-short attributes, decoded: Short2 is a flat layer's position, Short4 a
+            // symbol's anchor and corner offset. Both are what a comparison against another
+            // implementation is actually about, and a hash cannot say *how* two differ.
             const bool isShort2 = a.dataType == 9;
+            const bool isShort4 = a.dataType == 11;
             std::fprintf(out,
                          "  attr id=%zu dt=%d count=%zu bytes=%zu%s\n",
                          a.attrId,
                          a.dataType,
                          a.sourceCount,
                          a.raw.size(),
-                         isShort2 ? " (position)" : "");
-            if (!isShort2 || a.raw.size() < 4) {
+                         isShort2 ? " (position)" : (isShort4 ? " (short4)" : ""));
+            if (!(isShort2 || isShort4) || a.raw.size() < 4) {
                 continue;
             }
-            const auto* values = reinterpret_cast<const std::int16_t*>(a.raw.data());
-            const std::size_t pairs = a.raw.size() / 4;
+            // An interleaved attribute is `size` bytes every `stride`; a lone one is packed.
+            const std::size_t lanes = isShort2 ? 2 : 4;
+            const std::size_t size = lanes * sizeof(std::int16_t);
+            const std::size_t step = a.stride ? a.stride : size;
             std::fprintf(out, "   ");
-            for (std::size_t i = 0; i < pairs; ++i) {
-                std::fprintf(out, " (%d,%d)", values[i * 2], values[i * 2 + 1]);
+            for (std::size_t at = a.offset; at + size <= a.raw.size(); at += step) {
+                std::int16_t values[4] = {0, 0, 0, 0};
+                std::memcpy(values, a.raw.data() + at, size);
+                if (lanes == 2) {
+                    std::fprintf(out, " (%d,%d)", values[0], values[1]);
+                } else {
+                    std::fprintf(out, " (%d,%d,%d,%d)", values[0], values[1], values[2], values[3]);
+                }
             }
             std::fprintf(out, "\n");
         }
