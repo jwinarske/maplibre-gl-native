@@ -11,6 +11,7 @@
 // By default it renders a self-contained style (inline GeoJSON, no network) so the run is
 // hermetic. Pass a style URL or file path to point it at a real style instead.
 
+#include <mbgl/gfx/vertex_attribute.hpp>
 #include <mbgl/capture/frame_diff.hpp>
 #include <mbgl/capture/renderer_backend.hpp>
 
@@ -254,6 +255,19 @@ private:
         std::uint32_t stride = 0;
         std::size_t sourceCount = 0;
         std::uint64_t sourceHash = 0;
+        /// Hash of this attribute's own bytes, rather than of the buffer it shares.
+        ///
+        /// Interleaved attributes share one buffer, so `sourceHash` is the same number for all
+        /// of them and says nothing about any one. That matters for symbols: three attributes
+        /// share the glyph vertex buffer and only one of them carries texture coordinates, but
+        /// because the atlas packing is not deterministic the *whole* buffer has to be elided
+        /// from a committed dump -- taking the two deterministic attributes with it.
+        ///
+        /// Hashing each attribute's own slice separates them, so a consumer of the dump can
+        /// elide the one that follows the atlas and keep the ones that do not. Without it there
+        /// is no way to tell two labels apart that differ only in glyph size, which is what
+        /// per-section scaling changes.
+        std::uint64_t fieldHash = 0;
         /// Raw bytes, kept only for --dump-vertices. Not hashed and not part of the dump.
         std::vector<std::uint8_t> raw;
     };
@@ -421,6 +435,10 @@ private:
     }
 
     static AttrRecord attrRecord(const capture::AttributeDesc& desc);
+    static std::uint64_t hashField(const std::vector<std::uint8_t>& raw,
+                                   std::uint32_t offset,
+                                   std::uint32_t stride,
+                                   std::size_t size);
     static DrawableRecord record(const capture::DrawableAdd& add);
 
     /// Assigns every drawable a stable key, and returns them in dump order.
@@ -434,6 +452,34 @@ private:
     capture::FrameOrder order;
     bool haveOrder = false;
 };
+
+/// Hashes one attribute's own bytes out of the buffer it may be sharing.
+///
+/// An interleaved attribute occupies `size` bytes at `offset` in every `stride`-byte vertex.
+/// Walking those and hashing them gives a number that is this attribute's alone, where hashing
+/// the whole buffer gives one that every attribute sharing it reports identically.
+///
+/// A stride of zero means the attribute is the whole vertex, which is the un-interleaved case:
+/// there is nothing to separate, so the buffer's own hash is the answer.
+std::uint64_t DumpFrameSink::hashField(const std::vector<std::uint8_t>& raw,
+                        std::uint32_t offset,
+                        std::uint32_t stride,
+                        std::size_t size) {
+    if (raw.empty() || size == 0) {
+        return 0;
+    }
+    if (stride == 0) {
+        return hash(raw.data(), raw.size());
+    }
+    std::vector<std::uint8_t> field;
+    field.reserve(raw.size());
+    for (std::size_t at = offset; at + size <= raw.size(); at += stride) {
+        field.insert(field.end(),
+                     raw.begin() + static_cast<std::ptrdiff_t>(at),
+                     raw.begin() + static_cast<std::ptrdiff_t>(at + size));
+    }
+    return hash(field.data(), field.size());
+}
 
 DumpFrameSink::AttrRecord DumpFrameSink::attrRecord(const capture::AttributeDesc& desc) {
     AttrRecord out;
@@ -463,6 +509,10 @@ DumpFrameSink::AttrRecord DumpFrameSink::attrRecord(const capture::AttributeDesc
         out.sourceHash = hash(desc.rawData->data(), desc.rawData->size());
         out.raw = *desc.rawData;
     }
+    out.fieldHash = hashField(out.raw,
+                              out.offset,
+                              out.stride,
+                              mln::gfx::VertexAttribute::getStrideOf(desc.dataType));
     return out;
 }
 
@@ -645,7 +695,7 @@ void DumpFrameSink::dump(std::FILE* out) const {
                      d->segments.size());
         for (const auto& a : d->attrs) {
             std::fprintf(out,
-                         "  attr %s id=%zu bind=%d dt=%d ddt=%d off=%u voff=%u stride=%u src=%zu:%016" PRIx64 "\n",
+                         "  attr %s id=%zu bind=%d dt=%d ddt=%d off=%u voff=%u stride=%u src=%zu:%016" PRIx64 " fld=%016" PRIx64 "\n",
                          key.c_str(),
                          a.attrId,
                          a.index,
@@ -655,11 +705,12 @@ void DumpFrameSink::dump(std::FILE* out) const {
                          a.vertexOffset,
                          a.stride,
                          a.sourceCount,
-                         a.sourceHash);
+                         a.sourceHash,
+                         a.fieldHash);
         }
         for (const auto& a : d->instanceAttrs) {
             std::fprintf(out,
-                         "  iattr %s id=%zu bind=%d dt=%d ddt=%d off=%u voff=%u stride=%u src=%zu:%016" PRIx64 "\n",
+                         "  iattr %s id=%zu bind=%d dt=%d ddt=%d off=%u voff=%u stride=%u src=%zu:%016" PRIx64 " fld=%016" PRIx64 "\n",
                          key.c_str(),
                          a.attrId,
                          a.index,
@@ -669,7 +720,8 @@ void DumpFrameSink::dump(std::FILE* out) const {
                          a.vertexOffset,
                          a.stride,
                          a.sourceCount,
-                         a.sourceHash);
+                         a.sourceHash,
+                         a.fieldHash);
         }
         for (const auto& s : d->segments) {
             std::fprintf(out,
