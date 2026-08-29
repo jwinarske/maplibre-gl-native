@@ -27,6 +27,7 @@
 #include <mbgl/style/transition_options.hpp>
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/run_loop.hpp>
+#include <mbgl/util/i18n.hpp>
 
 // Buffer contents are hashed into the dump, and the vector types that own them live under
 // src/ rather than include/. The probe already links mbgl-core; capture.cmake adds src/ to
@@ -50,6 +51,53 @@
 using namespace mln;
 
 namespace {
+
+// Dumps the vertical-orientation predicates for the whole Basic Multilingual Plane.
+//
+// `hasUprightVerticalOrientation` is 120 lines of nested block tests with exclusions carved out
+// of them by hand, and the frontend needs the same answer for every codepoint. Transcribing it
+// is the sort of thing that goes subtly wrong in the middle of a range and is never noticed,
+// and a parser over that control flow would be a third way to be wrong. So it is asked instead:
+// the predicates are called here, in mbgl, and the answers come back as ranges. The frontend's
+// table is then correct by construction rather than by review, which is what DR-6 asks for and
+// what a static parse cannot give for a function this shaped.
+//
+// Beyond the BMP is not covered because these take a `char16_t`: mbgl itself only ever asks
+// about a UTF-16 code unit, so a supplementary codepoint reaches the predicate as a surrogate
+// pair and never as itself.
+void dumpVerticalOrientation() {
+    struct Predicate {
+        const char* name;
+        bool (*test)(char16_t);
+    };
+    const Predicate predicates[] = {
+        {"upright", &util::i18n::hasUprightVerticalOrientation},
+        {"neutral", &util::i18n::hasNeutralVerticalOrientation},
+        {"complex", &util::i18n::isCharInComplexShapingScript},
+    };
+
+    for (const auto& predicate : predicates) {
+        long start = -1;
+        for (long chr = 0; chr <= 0x10000; ++chr) {
+            const bool held = chr < 0x10000 && predicate.test(static_cast<char16_t>(chr));
+            if (held && start < 0) {
+                start = chr;
+            } else if (!held && start >= 0) {
+                std::printf("%s %04lX %04lX\n", predicate.name, start, chr - 1);
+                start = -1;
+            }
+        }
+    }
+
+    // The punctuation map is a table already, but reading it out here keeps every vertical fact
+    // coming from one place and one revision.
+    for (long chr = 0; chr < 0x10000; ++chr) {
+        const char16_t replacement = util::i18n::verticalizePunctuation(static_cast<char16_t>(chr));
+        if (replacement) {
+            std::printf("punctuation %04lX %04X\n", chr, replacement);
+        }
+    }
+}
 
 constexpr const char* kInlineStyle = R"JSON({
   "version": 8,
@@ -932,6 +980,22 @@ public:
     const TaggedScheduler& getThreadPool() const override { return backend->getThreadPool(); }
 
     /// Returns true if a frame was actually produced.
+    /// Renders whether or not anything changed.
+    ///
+    /// `renderFrameIfDirty` gates on the *probe's* own flag, which is the probe being polite
+    /// rather than mbgl being cheap: `Renderer::render` is where the tile pyramid is updated,
+    /// the cover recomputed and the renderables walked, and it does all of that whether the
+    /// camera moved or not. Measuring the settled cost means calling it.
+    bool renderFrameAlways() {
+        if (!renderer || !updateParameters) {
+            return false;
+        }
+        gfx::BackendScope guard{*backend};
+        auto params = updateParameters;
+        renderer->render(params);
+        return true;
+    }
+
     bool renderFrameIfDirty() {
         if (!renderer || !updateParameters || !dirty) {
             return false;
@@ -997,6 +1061,25 @@ int main(int argc, char* argv[]) {
         }
         return false;
     }();
+    // How many settled frames to time, for `--bench-idle`.
+    const int benchIdle = [&] {
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--bench-idle=", 13) == 0) {
+                return static_cast<int>(std::strtol(argv[i] + 13, nullptr, 10));
+            }
+        }
+        return 0;
+    }();
+
+    // Answering the vertical-orientation predicates needs no map, no style and no frame, so it
+    // returns before any of that is built.
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--dump-vertical") == 0) {
+            dumpVerticalOrientation();
+            return 0;
+        }
+    }
+
     constexpr int kFrames = 8;
 
     // Data-driven paint properties should always materialize as vertex attributes or UBO
@@ -1132,6 +1215,39 @@ int main(int argc, char* argv[]) {
             std::fclose(out);
             Log::Info(Event::General, "probe: wrote dump to " + dumpPath);
         }
+    }
+
+    // What a settled frame costs. The map has stopped changing by here -- the loop above spins
+    // until the drawable set and the draw order stop moving -- so every frame timed below is one
+    // where nothing has moved and mbgl is asked for a frame anyway. That is the comparison: not
+    // whether it can skip the work, but what the work costs when there is none to do.
+    //
+    // Reported as percentiles and a maximum rather than a mean. A frame budget is a promise about
+    // the worst frame, and a mean hides exactly the frame that breaks it.
+    if (benchIdle > 0) {
+        std::vector<double> micros;
+        micros.reserve(static_cast<std::size_t>(benchIdle));
+        for (int i = 0; i < benchIdle; ++i) {
+            const auto started = std::chrono::steady_clock::now();
+            frontend.renderFrameAlways();
+            const auto elapsed = std::chrono::steady_clock::now() - started;
+            micros.push_back(std::chrono::duration<double, std::micro>(elapsed).count());
+        }
+        std::sort(micros.begin(), micros.end());
+        const auto at = [&](double fraction) {
+            const auto index = static_cast<std::size_t>((static_cast<double>(micros.size()) - 1.0) * fraction);
+            return micros[index];
+        };
+        double total = 0.0;
+        for (const double value : micros) {
+            total += value;
+        }
+        std::printf("\n=== idle frame cost (mbgl), %zu settled frames ===\n", micros.size());
+        std::printf("idle_p50_us %.2f\n", at(0.50));
+        std::printf("idle_p95_us %.2f\n", at(0.95));
+        std::printf("idle_p99_us %.2f\n", at(0.99));
+        std::printf("idle_max_us %.2f\n", micros.back());
+        std::printf("idle_mean_us %.2f\n", total / static_cast<double>(micros.size()));
     }
 
     std::printf("\n=== capture probe result ===\n");
