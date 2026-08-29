@@ -1061,6 +1061,38 @@ int main(int argc, char* argv[]) {
         }
         return false;
     }();
+    // The zoom sweep to time, for `--bench-sweep=lo:hi:steps`.
+    //
+    // A crossing is where mbgl's per-frame re-derivation matters *least* -- the cover really has
+    // changed, so the work it does every frame is work that had to happen this frame. That makes
+    // it the honest comparison: idle cost measures who skips better, and this measures who does
+    // the unavoidable work faster.
+    struct Sweep {
+        double low = 0.0;
+        double high = 0.0;
+        int steps = 0;
+    };
+    const Sweep benchSweep = [&]() -> Sweep {
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--bench-sweep=", 14) != 0) {
+                continue;
+            }
+            Sweep out;
+            char* cursor = nullptr;
+            out.low = std::strtod(argv[i] + 14, &cursor);
+            if (!cursor || *cursor != ':') {
+                return {};
+            }
+            out.high = std::strtod(cursor + 1, &cursor);
+            if (!cursor || *cursor != ':') {
+                return {};
+            }
+            out.steps = static_cast<int>(std::strtol(cursor + 1, nullptr, 10));
+            return out;
+        }
+        return {};
+    }();
+
     // How many settled frames to time, for `--bench-idle`.
     const int benchIdle = [&] {
         for (int i = 1; i < argc; ++i) {
@@ -1248,6 +1280,49 @@ int main(int argc, char* argv[]) {
         std::printf("idle_p99_us %.2f\n", at(0.99));
         std::printf("idle_max_us %.2f\n", micros.back());
         std::printf("idle_mean_us %.2f\n", total / static_cast<double>(micros.size()));
+    }
+
+    // The sweep. Each step moves the camera and asks for a frame, timed. Up and back down, so
+    // every crossing is measured in both directions -- a cover that grows and one that shrinks
+    // are different work, and the expensive one is not always the same.
+    if (benchSweep.steps > 1) {
+        std::vector<double> micros;
+        micros.reserve(static_cast<std::size_t>(benchSweep.steps) * 2);
+        const double span = benchSweep.high - benchSweep.low;
+        for (int direction = 0; direction < 2; ++direction) {
+            for (int step = 0; step < benchSweep.steps; ++step) {
+                const double fraction = static_cast<double>(step) / (benchSweep.steps - 1);
+                const double at = direction == 0 ? benchSweep.low + span * fraction
+                                                 : benchSweep.high - span * fraction;
+                map.jumpTo(CameraOptions().withCenter(LatLng{51.505, -0.11}).withZoom(at));
+                // The jump makes the frontend dirty; run the loop so the update parameters
+                // reach the renderer before the frame is timed.
+                runLoop.runOnce();
+                const auto started = std::chrono::steady_clock::now();
+                frontend.renderFrameAlways();
+                const auto elapsed = std::chrono::steady_clock::now() - started;
+                micros.push_back(std::chrono::duration<double, std::micro>(elapsed).count());
+            }
+        }
+        std::vector<double> sorted = micros;
+        std::sort(sorted.begin(), sorted.end());
+        const auto at = [&](double fraction) {
+            const auto index = static_cast<std::size_t>((static_cast<double>(sorted.size()) - 1.0) * fraction);
+            return sorted[index];
+        };
+        double total = 0.0;
+        for (const double value : sorted) {
+            total += value;
+        }
+        std::printf("\n=== sweep frame cost (mbgl), %zu frames z%.1f-z%.1f ===\n",
+                    sorted.size(),
+                    benchSweep.low,
+                    benchSweep.high);
+        std::printf("sweep_p50_us %.2f\n", at(0.50));
+        std::printf("sweep_p95_us %.2f\n", at(0.95));
+        std::printf("sweep_p99_us %.2f\n", at(0.99));
+        std::printf("sweep_max_us %.2f\n", sorted.back());
+        std::printf("sweep_mean_us %.2f\n", total / static_cast<double>(sorted.size()));
     }
 
     std::printf("\n=== capture probe result ===\n");
