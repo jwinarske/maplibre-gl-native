@@ -1295,9 +1295,29 @@ int main(int argc, char* argv[]) {
                 const double at = direction == 0 ? benchSweep.low + span * fraction
                                                  : benchSweep.high - span * fraction;
                 map.jumpTo(CameraOptions().withCenter(LatLng{51.505, -0.11}).withZoom(at));
-                // The jump makes the frontend dirty; run the loop so the update parameters
-                // reach the renderer before the frame is timed.
-                runLoop.runOnce();
+
+                // Settle before timing. A jump asks for a frame at once, and this source's
+                // tiling is scheduled -- `GeoJSONVTData::getTile` replies through
+                // `Scheduler::GetSequenced` unless a style asks for synchronous updates, and
+                // none here does. Timing the frame straight after the jump measures mbgl drawing
+                // a map that has not finished arriving, which reports *less* than a real frame
+                // costs. So the loop is run until the drawable set stops moving, and only then
+                // is a frame timed.
+                //
+                // Bounded, because a step that never settles must not hang the run: the
+                // measurement is then of a frame that is as settled as it got, which is still
+                // the same question asked of both sides.
+                std::uint64_t settleLive = ~0ull;
+                for (int settle = 0; settle < 64; ++settle) {
+                    runLoop.runOnce();
+                    frontend.renderFrameIfDirty();
+                    const auto& s = sink.getStats();
+                    if (s.liveDrawables == settleLive) {
+                        break;
+                    }
+                    settleLive = s.liveDrawables;
+                }
+
                 const auto started = std::chrono::steady_clock::now();
                 frontend.renderFrameAlways();
                 const auto elapsed = std::chrono::steady_clock::now() - started;
