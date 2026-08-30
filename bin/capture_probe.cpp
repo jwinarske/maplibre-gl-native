@@ -1123,6 +1123,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // The first rendered frame with nothing uncovered, counted from style load.
+    int coldLegible = -1;
+
     constexpr int kFrames = 8;
 
     // Data-driven paint properties should always materialize as vertex attributes or UBO
@@ -1223,9 +1226,20 @@ int main(int argc, char* argv[]) {
             loadedAt = std::chrono::steady_clock::now();
             stableFrames = 0;
         }
+        // Reset before the render so what is read after it belongs to that frame rather than to
+        // the run. This loop begins at style load, so the frame it reports is a cold start by
+        // construction -- which is the whole difficulty with measuring it after settling.
+        algorithm::holeCounter.store(0, std::memory_order_relaxed);
         if (frontend.renderFrameIfDirty()) {
             ++framesRendered;
             const auto& s = sink.getStats();
+            // The first frame that drew something with no ideal tile left uncovered. Drawing
+            // *something* is required: a frame before any tile exists has no ideal tiles to
+            // leave uncovered either, and would otherwise read as legible.
+            if (coldLegible < 0 && s.drawsOrdered > 0
+                && algorithm::holeCounter.load(std::memory_order_relaxed) == 0) {
+                coldLegible = framesRendered - 1;
+            }
             if (s.drawsOrdered > 0) {
                 ++framesWithContent;
             }
@@ -1280,7 +1294,7 @@ int main(int argc, char* argv[]) {
             }
         }
         std::printf("\n=== time to legible (mbgl) ===\n");
-        std::printf("legible_frame %d\n", legibleAt);
+        std::printf("legible_frame_settled %d\n", legibleAt);
     }
 
     // What a settled frame costs. The map has stopped changing by here -- the loop above spins
@@ -1383,6 +1397,14 @@ int main(int argc, char* argv[]) {
     if (!observer.failure.empty()) {
         std::printf("FAILED: %s\n", observer.failure.c_str());
         return 1;
+    }
+    if (benchLegible > 0) {
+        // Reported only when asked for, because it is not yet believable: on a style whose map
+        // plainly draws, this stays -1 -- never a rendered frame with no ideal tile uncovered.
+        // Something about where the counter is read relative to the passes that fill it does not
+        // line up, and until that is found the number is not a measurement. The settled figure
+        // above has the same doubt on it.
+        std::printf("cold_legible_frame %d\n", coldLegible);
     }
     std::printf("style loaded      : %s\n", observer.styleLoaded ? "yes" : "no");
     std::printf("frames rendered   : %d (%d with content, loop spins %d)\n", framesRendered, framesWithContent, spins);
