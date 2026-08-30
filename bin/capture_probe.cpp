@@ -27,6 +27,7 @@
 #include <mbgl/style/transition_options.hpp>
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/run_loop.hpp>
+#include <mbgl/algorithm/update_renderables.hpp>
 #include <mbgl/util/i18n.hpp>
 
 // Buffer contents are hashed into the dump, and the vector types that own them live under
@@ -1093,6 +1094,16 @@ int main(int argc, char* argv[]) {
         return {};
     }();
 
+    // How many frames to give the map to become legible, for `--bench-legible=N`.
+    const int benchLegible = [&] {
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--bench-legible=", 16) == 0) {
+                return static_cast<int>(std::strtol(argv[i] + 16, nullptr, 10));
+            }
+        }
+        return 0;
+    }();
+
     // How many settled frames to time, for `--bench-idle`.
     const int benchIdle = [&] {
         for (int i = 1; i < argc; ++i) {
@@ -1247,6 +1258,29 @@ int main(int argc, char* argv[]) {
             std::fclose(out);
             Log::Info(Event::General, "probe: wrote dump to " + dumpPath);
         }
+    }
+
+    // Time to first legible frame: the first render after which no ideal tile was left with
+    // nothing drawn over it. The counter is reset before each frame and read after, so what it
+    // reports is that frame's holes rather than a running total.
+    //
+    // Symmetric with the tessella harness by construction: both count the same thing in the same
+    // place in the same algorithm, including the correction for an ancestry short-circuited
+    // because a sibling walked it -- without which both sides would report a drawn map as blank.
+    if (benchLegible > 0) {
+        int legibleAt = -1;
+        for (int frame = 0; frame < benchLegible; ++frame) {
+            algorithm::holeCounter.store(0, std::memory_order_relaxed);
+            runLoop.runOnce();
+            frontend.renderFrameAlways();
+            const auto holes = algorithm::holeCounter.load(std::memory_order_relaxed);
+            if (holes == 0 && legibleAt < 0) {
+                legibleAt = frame;
+                break;
+            }
+        }
+        std::printf("\n=== time to legible (mbgl) ===\n");
+        std::printf("legible_frame %d\n", legibleAt);
     }
 
     // What a settled frame costs. The map has stopped changing by here -- the loop above spins

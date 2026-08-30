@@ -4,11 +4,21 @@
 #include <mbgl/tile/tile_necessity.hpp>
 #include <mbgl/util/range.hpp>
 
+#include <atomic>
 #include <unordered_set>
 #include <optional>
 
 namespace mln {
 namespace algorithm {
+
+/// Holes counted across every `updateRenderables` pass since it was last reset.
+///
+/// Instrumentation for the capture probe, and nothing reads it in a normal build: the
+/// pass touches it only because `TilePyramid` hands its address over, and the value
+/// steers nothing. An ideal tile counts as a hole when the walk ended with nothing drawn
+/// over it at any resolution, so zero across a frame is a viewport covered somehow --
+/// which is what "legible" means.
+inline std::atomic<std::size_t> holeCounter{0};
 
 template <typename GetTileFn,
           typename CreateTileFn,
@@ -23,8 +33,22 @@ void updateRenderables(GetTileFn getTile,
                        const IdealTileIDs& idealTileIDs,
                        const PrefetchedTileMap& prefetchedTiles,
                        const Range<uint8_t>& zoomRange,
-                       const std::optional<uint8_t>& maxParentOverscaleFactor = std::nullopt) {
+                       const std::optional<uint8_t>& maxParentOverscaleFactor = std::nullopt,
+                       // Observation only. When non-null, receives the number of ideal tiles that
+                       // ended this walk with nothing drawn over them at any resolution -- the
+                       // holes, which is the complement of a legible frame.
+                       //
+                       // Purely additive: nothing below reads it, no control flow depends on it,
+                       // and the default leaves every existing caller byte-identical.
+                       std::atomic<std::size_t>* uncoveredOut = nullptr) {
     std::unordered_set<OverscaledTileID> checked;
+    // Ancestors this walk actually drew, which is not the same as the ancestries it visited.
+    //
+    // The ascent below breaks when a sibling has already walked an ancestry, leaving
+    // `parentOrChildTileFound` false -- and that sibling may have *rendered* an ancestor, which
+    // covers this tile too since it contains it. Counting such a tile as a hole would report a
+    // drawn map as blank. Only consulted when `uncoveredOut` is asked for.
+    std::unordered_set<OverscaledTileID> renderedAncestors;
     bool covered = false;
     bool parentOrChildTileFound = false;
     int32_t overscaledZ = 0;
@@ -59,6 +83,7 @@ void updateRenderables(GetTileFn getTile,
             retainTile(*tile, TileNecessity::Required);
             covered = true;
             parentOrChildTileFound = false;
+            bool coveredBySibling = false;
             overscaledZ = idealDataTileID.overscaledZ + 1;
             if (std::cmp_greater(overscaledZ, zoomRange.max)) {
                 // We're looking for an overzoomed child tile.
@@ -104,6 +129,22 @@ void updateRenderables(GetTileFn getTile,
                     if (checked.find(parentDataTileID) != checked.end()) {
                         // Break parent tile ascent, this route has been checked
                         // by another child tile before.
+                        if (uncoveredOut) {
+                            // That earlier walk may have drawn one of these ancestors, which
+                            // covers this tile as well. Recorded for the hole count only --
+                            // `parentOrChildTileFound` is deliberately left alone, so the
+                            // prefetched fallback below still runs exactly as it did.
+                            for (auto above = parentDataTileID;;) {
+                                if (renderedAncestors.count(above)) {
+                                    coveredBySibling = true;
+                                    break;
+                                }
+                                if (above.overscaledZ <= zoomRange.min) {
+                                    break;
+                                }
+                                above = above.scaledTo(above.overscaledZ - 1);
+                            }
+                        }
                         break;
                     } else {
                         checked.emplace(parentDataTileID);
@@ -134,6 +175,9 @@ void updateRenderables(GetTileFn getTile,
 
                         if (tile->isRenderable()) {
                             renderTile(parentDataTileID.toUnwrapped(), *tile);
+                            if (uncoveredOut) {
+                                renderedAncestors.emplace(parentDataTileID);
+                            }
                             parentOrChildTileFound = true;
                             // Break parent tile ascent, since we found one.
                             break;
@@ -141,6 +185,9 @@ void updateRenderables(GetTileFn getTile,
                     }
                 }
 
+                if (uncoveredOut && !parentOrChildTileFound && !coveredBySibling) {
+                    uncoveredOut->fetch_add(1, std::memory_order_relaxed);
+                }
                 if (!parentOrChildTileFound) {
                     // Reuse prefetched tiles in order to avoid empty screen
                     for (auto& prefetchedTileEntry : prefetchedTiles) {
