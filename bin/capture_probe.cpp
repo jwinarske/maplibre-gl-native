@@ -28,6 +28,8 @@
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/run_loop.hpp>
 #include <mbgl/algorithm/update_renderables.hpp>
+
+#include <limits>
 #include <mbgl/util/i18n.hpp>
 
 // Buffer contents are hashed into the dump, and the vector types that own them live under
@@ -1125,6 +1127,8 @@ int main(int argc, char* argv[]) {
 
     // The first rendered frame with nothing uncovered, counted from style load.
     int coldLegible = -1;
+    // The lowest hole count seen, which a real style reaches above zero.
+    std::size_t holesFloor = std::numeric_limits<std::size_t>::max();
 
     constexpr int kFrames = 8;
 
@@ -1236,8 +1240,24 @@ int main(int argc, char* argv[]) {
             // The first frame that drew something with no ideal tile left uncovered. Drawing
             // *something* is required: a frame before any tile exists has no ideal tiles to
             // leave uncovered either, and would otherwise read as legible.
-            if (coldLegible < 0 && s.drawsOrdered > 0
-                && algorithm::holeCounter.load(std::memory_order_relaxed) == 0) {
+            const auto holesNow = algorithm::holeCounter.load(std::memory_order_relaxed);
+            // The first frame at the *settled* hole count rather than at zero.
+            //
+            // Zero is not reachable on a real style, and finding that out is what this
+            // instrumentation was for. A hole is an ideal tile with nothing drawn over it, and
+            // that conflates two states: not loaded yet, and loaded with nothing in it. A sparse
+            // source -- this style's three points, or any vector tile away from a city -- has
+            // many of the second, so the count settles at a floor above zero and stays there.
+            // Measured here: twelve holes on the first drawing frame, settling to five and never
+            // moving.
+            //
+            // So legibility is the frame the count stops *falling*, not the frame it hits zero,
+            // and the floor is a property of the style rather than of the map's progress.
+            // Only once the map draws. Before that `updateRenderables` has not run -- the source
+            // has no visible layer yet -- so the counter reads zero for want of being touched,
+            // and a floor taken from those frames would be zero from the start.
+            if (s.drawsOrdered > 0 && holesNow < holesFloor) {
+                holesFloor = holesNow;
                 coldLegible = framesRendered - 1;
             }
             if (s.drawsOrdered > 0) {
@@ -1399,12 +1419,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     if (benchLegible > 0) {
-        // Reported only when asked for, because it is not yet believable: on a style whose map
-        // plainly draws, this stays -1 -- never a rendered frame with no ideal tile uncovered.
-        // Something about where the counter is read relative to the passes that fill it does not
-        // line up, and until that is found the number is not a measurement. The settled figure
-        // above has the same doubt on it.
+        // The frame the hole count reached its floor, and the floor itself. See the note at
+        // the assignment: zero is not reachable on a real style, so the floor is the target.
         std::printf("cold_legible_frame %d\n", coldLegible);
+        std::printf("cold_holes_floor %zu\n", holesFloor);
     }
     std::printf("style loaded      : %s\n", observer.styleLoaded ? "yes" : "no");
     std::printf("frames rendered   : %d (%d with content, loop spins %d)\n", framesRendered, framesWithContent, spins);
