@@ -1127,6 +1127,15 @@ int main(int argc, char* argv[]) {
 
     // The first rendered frame with nothing uncovered, counted from style load.
     int coldLegible = -1;
+    // The frame the style finished loading.
+    //
+    // Everything before it is mbgl fetching and parsing a style document, not drawing a map:
+    // its `Map` exists before its style does, so a cold run spends its first frames with no
+    // layers to render at all. Counting legibility from process start therefore measures style
+    // loading plus tile loading, and the first part dominates and varies run to run -- 27 frames
+    // in one run and 9 in the next on the same style. Subtracting it is what makes the remainder
+    // comparable to a harness that begins with a parsed style.
+    int styleLoadedFrame = -1;
     // The lowest hole count seen, which a real style reaches above zero.
     std::size_t holesFloor = std::numeric_limits<std::size_t>::max();
 
@@ -1241,6 +1250,9 @@ int main(int argc, char* argv[]) {
             // *something* is required: a frame before any tile exists has no ideal tiles to
             // leave uncovered either, and would otherwise read as legible.
             const auto holesNow = algorithm::holeCounter.load(std::memory_order_relaxed);
+            if (styleLoadedFrame < 0 && observer.styleLoaded) {
+                styleLoadedFrame = framesRendered - 1;
+            }
             // The first frame at the *settled* hole count rather than at zero.
             //
             // Zero is not reachable on a real style, and finding that out is what this
@@ -1421,7 +1433,11 @@ int main(int argc, char* argv[]) {
     if (benchLegible > 0) {
         // The frame the hole count reached its floor, and the floor itself. See the note at
         // the assignment: zero is not reachable on a real style, so the floor is the target.
+        std::printf("style_loaded_frame %d\n", styleLoadedFrame);
         std::printf("cold_legible_frame %d\n", coldLegible);
+        std::printf("legible_frames_after_style %d\n",
+                    (coldLegible >= 0 && styleLoadedFrame >= 0) ? coldLegible - styleLoadedFrame
+                                                                : -1);
         std::printf("cold_holes_floor %zu\n", holesFloor);
     }
     std::printf("style loaded      : %s\n", observer.styleLoaded ? "yes" : "no");
