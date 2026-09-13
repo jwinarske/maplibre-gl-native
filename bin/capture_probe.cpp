@@ -244,6 +244,7 @@ public:
         } else if (update.layerIndex) {
             key.scope = UboKey::Layer;
             key.owner = *update.layerIndex;
+            key.name = update.layerName;
         } else if (update.ownerId) {
             key.scope = UboKey::Owner;
             key.owner = static_cast<std::int64_t>(update.ownerId->id());
@@ -262,6 +263,16 @@ public:
         // Successive sub-region uploads each contribute, so the running hash reflects the
         // whole upload history rather than only the last rect.
         texture.hash = hash(update.pixels, update.pixelBytes, texture.hash);
+    }
+
+    void onRenderTargetCreate(const capture::RenderTargetCreate& rt) override {
+        inner.onRenderTargetCreate(rt);
+        // One entry per target, not per distinct shape. Two heatmap layers need two targets of
+        // identical size, and a dump that collapsed them would not say so. RenderHeatmapLayer
+        // creates its target once and calls setSize on a viewport change rather than asking
+        // again, so this counts layers rather than frames -- which the color-ramp texture
+        // beside it notably does not.
+        renderTargets.push_back(RenderTargetRecord{rt.size.width, rt.size.height, static_cast<int>(rt.channelType)});
     }
 
     void onStencilTiles(const capture::StencilTiles& tiles) override {
@@ -392,10 +403,18 @@ private:
     struct UboKey {
         enum Scope { Global, Layer, Owner } scope = Global;
         std::int64_t owner = 0;
+        /// The layer group's name for Layer scope, empty otherwise.
+        ///
+        /// Part of the key, not decoration. A heatmap builds a render target per style layer
+        /// and hardcodes the tile group inside it to index 0, so two heatmap layers both key
+        /// on zero and the second one's evaluated-properties buffer overwrote the first's --
+        /// a golden that pinned one layer's radius and silently dropped the other's.
+        std::string name;
         std::size_t slot = 0;
         bool operator<(const UboKey& other) const {
             if (scope != other.scope) return scope < other.scope;
             if (owner != other.owner) return owner < other.owner;
+            if (name != other.name) return name < other.name;
             return slot < other.slot;
         }
     };
@@ -409,6 +428,21 @@ private:
         std::uint32_t height = 0;
         int format = 0;
         std::uint64_t hash = kFnvOffset;
+    };
+
+    /// One offscreen target a style needs: how big, and in what channel type.
+    ///
+    /// Both are the renderer's own choices rather than the style's -- mbgl halves the viewport
+    /// and asks for HalfFloat because a kernel sum runs past one -- which is exactly why an
+    /// oracle has to carry them.
+    struct RenderTargetRecord {
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        int channelType = 0;
+
+        bool operator==(const RenderTargetRecord& other) const {
+            return width == other.width && height == other.height && channelType == other.channelType;
+        }
     };
 
     struct StencilRecord {
@@ -499,6 +533,7 @@ private:
     std::map<std::int64_t, DrawableRecord> drawables;
     std::map<UboKey, UboValue> ubos;
     std::map<std::int64_t, TextureRecord> textures;
+    std::vector<RenderTargetRecord> renderTargets;
     std::map<std::int32_t, std::vector<StencilRecord>> stencils;
     capture::FrameOrder order;
     bool haveOrder = false;
@@ -806,6 +841,8 @@ void DumpFrameSink::dump(std::FILE* out) const {
         if (key.scope == UboKey::Owner) {
             const auto it = idToKey.find(key.owner);
             owner = (it != idToKey.end()) ? it->second : std::string{"?"};
+        } else if (key.scope == UboKey::Layer && !key.name.empty()) {
+            owner += "/" + key.name;
         }
         // A consolidated buffer is an array indexed by uboIndex, and uboIndex comes from the
         // same arbitrary tile iteration the draw order does, so the array arrives permuted
@@ -855,7 +892,6 @@ void DumpFrameSink::dump(std::FILE* out) const {
         std::fprintf(out, "\n");
     }
 
-    std::fprintf(out, "textures %zu\n", textures.size());
     {
         std::vector<const TextureRecord*> sorted;
         for (const auto& [id, texture] : textures) {
@@ -867,6 +903,19 @@ void DumpFrameSink::dump(std::FILE* out) const {
             if (a->format != b->format) return a->format < b->format;
             return a->hash < b->hash;
         });
+        // Distinct content, not distinct ids. RenderHeatmapLayer rebuilds its texture-pass
+        // layer group every frame and creates a fresh color-ramp Texture2D each time, so a
+        // heatmap style produces one id per ramp per frame -- 86,290 of them over a settle,
+        // all byte-identical. How many times mbgl recreated the same pixels is a property of
+        // the run, not of the style, and it is the last thing in this dump that was.
+        sorted.erase(std::unique(sorted.begin(),
+                                 sorted.end(),
+                                 [](const TextureRecord* a, const TextureRecord* b) {
+                                     return a->width == b->width && a->height == b->height &&
+                                            a->format == b->format && a->hash == b->hash;
+                                 }),
+                     sorted.end());
+        std::fprintf(out, "textures %zu\n", sorted.size());
         for (const auto* t : sorted) {
             std::fprintf(out,
                          "texture %ux%u fmt=%d hash=%016" PRIx64 "\n",
@@ -874,6 +923,21 @@ void DumpFrameSink::dump(std::FILE* out) const {
                          t->height,
                          t->format,
                          t->hash);
+        }
+    }
+
+    std::fprintf(out, "rendertargets %zu\n", renderTargets.size());
+    {
+        // Layer-group creation order is not deterministic, and neither is which layer got its
+        // target first. Sorted for the same reason every other multiset in this dump is.
+        auto sorted = renderTargets;
+        std::sort(sorted.begin(), sorted.end(), [](const RenderTargetRecord& a, const RenderTargetRecord& b) {
+            if (a.width != b.width) return a.width < b.width;
+            if (a.height != b.height) return a.height < b.height;
+            return a.channelType < b.channelType;
+        });
+        for (const auto& rt : sorted) {
+            std::fprintf(out, "rendertarget %ux%u ct=%d\n", rt.width, rt.height, rt.channelType);
         }
     }
 

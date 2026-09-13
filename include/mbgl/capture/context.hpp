@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -90,7 +91,8 @@ public:
                                  std::size_t slot,
                                  const void* data,
                                  std::size_t size);
-    void recordLayerUboUpdate(std::int32_t layerIndex, std::size_t slot, const void* data, std::size_t size);
+    void recordLayerUboUpdate(
+        std::int32_t layerIndex, std::string_view layerName, std::size_t slot, const void* data, std::size_t size);
 
     /// Emit any frame-wide uniform buffer the renderer rewrote this frame.
     void emitGlobalUniforms();

@@ -34,6 +34,7 @@ list(APPEND
         ${PROJECT_SOURCE_DIR}/include/mbgl/capture/drawable_builder.hpp
         ${PROJECT_SOURCE_DIR}/include/mbgl/capture/frame_diff.hpp
         ${PROJECT_SOURCE_DIR}/include/mbgl/capture/layer_group.hpp
+        ${PROJECT_SOURCE_DIR}/include/mbgl/capture/offscreen_texture.hpp
         ${PROJECT_SOURCE_DIR}/include/mbgl/capture/renderer_backend.hpp
         ${PROJECT_SOURCE_DIR}/include/mbgl/capture/shader_program.hpp
         ${PROJECT_SOURCE_DIR}/include/mbgl/capture/texture2d.hpp
@@ -49,6 +50,7 @@ list(APPEND
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/drawable_builder.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/frame_diff.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/layer_group.cpp
+        ${PROJECT_SOURCE_DIR}/src/mbgl/capture/offscreen_texture.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/renderer_backend.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/dynamic_texture.cpp
         ${PROJECT_SOURCE_DIR}/src/mbgl/capture/texture2d.cpp

@@ -156,6 +156,15 @@ struct UboUpdate {
     bool isGlobal = false;
     /// Set when the buffer belongs to a layer group.
     std::optional<std::int32_t> layerIndex;
+    /// The layer group's name, which is the style layer id the group was built for.
+    ///
+    /// `layerIndex` alone does not identify a group. A heatmap draws into a render target of
+    /// its own and hardcodes the tile group inside it to index 0 (render_heatmap_layer.cpp),
+    /// so two heatmap layers produce two groups both claiming zero -- and a consumer keying on
+    /// the index alone keeps one evaluated-properties buffer and silently drops the other.
+    ///
+    /// BORROWED for the call, like `data`.
+    std::string_view layerName;
     /// Set when the buffer belongs to a single drawable.
     std::optional<util::SimpleIdentity> ownerId;
     std::size_t slot = 0;
@@ -182,6 +191,23 @@ struct TextureUpdate {
     /// asynchronously must copy first -- the next atlas insert rewrites this in place.
     const void* pixels = nullptr;
     std::size_t pixelBytes = 0;
+};
+
+/// An offscreen render target a layer asked for, and the texture the next pass samples.
+///
+/// A heatmap draws its kernels into one of these and then draws the target itself through a
+/// color ramp; a hillshade prepare pass does the same. The target never uploads pixels, so it
+/// produces no `TextureUpdate` and would otherwise be invisible on this protocol -- a consumer
+/// would see the second pass bind a texture id that nothing ever described.
+///
+/// Two things about it are properties of the renderer rather than of the style, and both have
+/// to travel: the size, which mbgl halves in each dimension against the viewport, and the
+/// channel type, which is `HalfFloat` because a kernel sum runs past one.
+struct RenderTargetCreate {
+    MapID mapId = 0;
+    util::SimpleIdentity textureId;
+    Size size;
+    gfx::TextureChannelDataType channelType = gfx::TextureChannelDataType::UnsignedByte;
 };
 
 /// One tile of a clip set: which tile, and the matrix that puts its mask quad on screen.
@@ -326,6 +352,7 @@ public:
     virtual void onDrawableRemove(const DrawableRemove&) {}
     virtual void onUboUpdate(const UboUpdate&) {}
     virtual void onTextureUpdate(const TextureUpdate&) {}
+    virtual void onRenderTargetCreate(const RenderTargetCreate&) {}
     virtual void onStencilTiles(const StencilTiles&) {}
     virtual void onFrameOrder(const FrameOrder&) {}
 };
@@ -345,6 +372,7 @@ public:
     void onDrawableRemove(const DrawableRemove&) override;
     void onUboUpdate(const UboUpdate&) override;
     void onTextureUpdate(const TextureUpdate&) override;
+    void onRenderTargetCreate(const RenderTargetCreate&) override;
     void onStencilTiles(const StencilTiles&) override;
     void onFrameOrder(const FrameOrder&) override;
 
@@ -354,6 +382,7 @@ public:
         std::uint64_t drawableRemoves = 0;
         std::uint64_t uboUpdates = 0;
         std::uint64_t textureUpdates = 0;
+        std::uint64_t renderTargets = 0;
         std::uint64_t stencilTileSets = 0;
         std::uint64_t drawsOrdered = 0;
         std::uint64_t liveDrawables = 0;

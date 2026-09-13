@@ -5,6 +5,7 @@
 #include "command_encoder.hpp"
 #include <mbgl/capture/drawable_builder.hpp>
 #include <mbgl/capture/layer_group.hpp>
+#include <mbgl/capture/offscreen_texture.hpp>
 #include <mbgl/capture/renderer_backend.hpp>
 #include <mbgl/capture/texture2d.hpp>
 #include <mbgl/gfx/dynamic_texture.hpp>
@@ -145,18 +146,20 @@ gfx::DynamicTexturePtr Context::createDynamicTexture(Size size, gfx::TexturePixe
 }
 
 RenderTargetPtr Context::createRenderTarget(Size size, gfx::TextureChannelDataType type) {
-    // Reachable only from heatmap / hillshade-prepare, which are out of scope until Phase 5.
-    // RenderTarget is generic, so this works; the offscreen texture behind it is inert.
+    // RenderTarget is generic; what it wants from us is the offscreen texture below.
     return std::make_shared<RenderTarget>(*this, size, type);
 }
 
-std::unique_ptr<gfx::OffscreenTexture> Context::createOffscreenTexture(Size, gfx::TextureChannelDataType) {
-    // No shared (non-backend) code reaches this today -- only the heatmap / hillshade-prepare
-    // passes would, and they are out of scope until Phase 5. Returning null would surface as a
-    // null dereference somewhere else entirely after a rebase, so say so here instead.
-    Log::Error(Event::General, "capture: createOffscreenTexture is not implemented (Phase 5)");
-    assert(false);
-    return {};
+std::unique_ptr<gfx::OffscreenTexture> Context::createOffscreenTexture(Size size, gfx::TextureChannelDataType type) {
+    auto target = std::make_unique<OffscreenTexture>(*this, size, type);
+    // The target uploads no pixels, so it produces no TextureUpdate. Announce it here or the
+    // second pass binds a texture id nothing on this protocol ever described.
+    sink.onRenderTargetCreate(
+        RenderTargetCreate{.mapId = mapId,
+                           .textureId = static_cast<Texture2D&>(*target->getTexture()).getID(),
+                           .size = size,
+                           .channelType = type});
+    return target;
 }
 
 std::unique_ptr<gfx::RenderbufferResource> Context::createRenderbufferResource(gfx::RenderbufferPixelType, Size) {
@@ -220,9 +223,15 @@ void Context::recordDrawableUboUpdate(const util::SimpleIdentity& owner,
                                .size = size});
 }
 
-void Context::recordLayerUboUpdate(std::int32_t layerIndex, std::size_t slot, const void* data, std::size_t size) {
-    sink.onUboUpdate(UboUpdate{
-        .mapId = mapId, .layerIndex = layerIndex, .ownerId = std::nullopt, .slot = slot, .data = data, .size = size});
+void Context::recordLayerUboUpdate(
+    std::int32_t layerIndex, std::string_view layerName, std::size_t slot, const void* data, std::size_t size) {
+    sink.onUboUpdate(UboUpdate{.mapId = mapId,
+                               .layerIndex = layerIndex,
+                               .layerName = layerName,
+                               .ownerId = std::nullopt,
+                               .slot = slot,
+                               .data = data,
+                               .size = size});
 }
 
 void Context::recordTextureUpdate(TextureUpdate&& tex) {

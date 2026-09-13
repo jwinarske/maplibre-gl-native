@@ -34,7 +34,10 @@ void uploadDrawables(Group& group, gfx::UploadPass& uploadPass) {
 /// drawable's UBO into one SSBO held here and stamp each drawable with `setUBOIndex()`
 /// (fill_layer_tweaker.cpp:245,266). The consumer pairs this buffer with the per-frame
 /// `DrawOrderEntry::uboIndex` to find a given drawable's slice.
-void emitLayerUniforms(Context& context, std::int32_t layerIndex, UniformBufferArray& uniforms) {
+void emitLayerUniforms(Context& context,
+                       std::int32_t layerIndex,
+                       std::string_view layerName,
+                       UniformBufferArray& uniforms) {
     for (std::size_t slot = 0; slot < uniforms.allocatedSize(); ++slot) {
         const auto& buf = uniforms.get(slot);
         if (!buf) {
@@ -44,7 +47,8 @@ void emitLayerUniforms(Context& context, std::int32_t layerIndex, UniformBufferA
         if (!captured.isDirty()) {
             continue;
         }
-        context.recordLayerUboUpdate(layerIndex, slot, captured.getContents().data(), captured.getContents().size());
+        context.recordLayerUboUpdate(
+            layerIndex, layerName, slot, captured.getContents().data(), captured.getContents().size());
         captured.clearDirty();
     }
 }
@@ -81,7 +85,7 @@ void LayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     if (!enabled || !getDrawableCount() || !parameters.renderPass) {
         return;
     }
-    emitLayerUniforms(context, getLayerIndex(), uniformBuffers);
+    emitLayerUniforms(context, getLayerIndex(), getName(), uniformBuffers);
     renderDrawables(*this, parameters);
 }
 
@@ -118,7 +122,7 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
         context.recordStencilTiles(std::move(st));
     }
 
-    emitLayerUniforms(context, getLayerIndex(), uniformBuffers);
+    emitLayerUniforms(context, getLayerIndex(), getName(), uniformBuffers);
     renderDrawables(*this, parameters);
 }
 

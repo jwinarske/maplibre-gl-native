@@ -162,6 +162,17 @@ void LogFrameSink::onTextureUpdate(const TextureUpdate& tex) {
     Log::Info(Event::Render, ss.str());
 }
 
+void LogFrameSink::onRenderTargetCreate(const RenderTargetCreate& rt) {
+    ++stats.renderTargets;
+    if (!verbose) {
+        return;
+    }
+    std::ostringstream ss;
+    ss << "  +rendertarget " << rt.textureId.id() << " " << rt.size.width << "x" << rt.size.height
+       << " ct=" << static_cast<int>(rt.channelType);
+    Log::Info(Event::Render, ss.str());
+}
+
 void LogFrameSink::onStencilTiles(const StencilTiles& st) {
     ++stats.stencilTileSets;
     if (verbose) {
