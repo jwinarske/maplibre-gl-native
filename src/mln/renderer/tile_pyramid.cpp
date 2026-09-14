@@ -225,7 +225,9 @@ void TilePyramid::update(const std::vector<Immutable<style::LayerProperties>>& l
                                  idealTiles,
                                  tiles,
                                  zoomRange,
-                                 maxParentTileOverscaleFactor);
+                                 maxParentTileOverscaleFactor,
+                                 // Observation only: the probe's legible-frame count.
+                                 &algorithm::holeCounter);
 
     for (auto previouslyRenderedTile : previouslyRenderedTiles) {
         Tile& tile = previouslyRenderedTile.second;
