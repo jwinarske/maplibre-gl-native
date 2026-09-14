@@ -17,6 +17,8 @@
 
 #include <mbgl/gfx/backend.hpp>
 #include <mbgl/gfx/backend_scope.hpp>
+#include "annotations.hpp"
+
 #include <mbgl/map/map.hpp>
 #include <mbgl/map/map_observer.hpp>
 #include <mbgl/map/map_options.hpp>
@@ -1263,7 +1265,41 @@ int main(int argc, char* argv[]) {
     };
     const double lat = coordinate("--lat=", 51.505);
     const double lon = coordinate("--lon=", -0.11);
-    map.jumpTo(CameraOptions().withCenter(LatLng{lat, lon}).withZoom(zoom));
+    // A pitched camera is a different question from a pitched *picture*: the drawables are the
+    // same set, and what moves is every screen-space quantity derived from them. Defaults are the
+    // flat camera every committed golden was captured at, so a capture without these is
+    // byte-identical to one from before they existed.
+    const double pitch = coordinate("--pitch=", 0.0);
+    const double bearing = coordinate("--bearing=", 0.0);
+    map.jumpTo(CameraOptions()
+                   .withCenter(LatLng{lat, lon})
+                   .withZoom(zoom)
+                   .withPitch(pitch)
+                   .withBearing(bearing));
+
+    // Annotations, which no style can carry. `--annotations=<geojson>` and a repeatable
+    // `--annotation-image=id=file.png`, spelled as `render`'s two flags are and read by the same
+    // code -- a scene the two tools read differently is a scene whose picture and whose dump
+    // cannot be compared.
+    //
+    // After `loadURL`/`loadJSON` and before the frames, which is when the style actually loads:
+    // `onStyleLoaded` re-runs `AnnotationManager::updateStyle`, so the source and layers survive
+    // the style replacing them.
+    try {
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--annotation-image=", 19) == 0) {
+                mln_annotations::addAnnotationImage(map, argv[i] + 19, 1.0f);
+            }
+        }
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], "--annotations=", 14) == 0) {
+                mln_annotations::addAnnotations(map, argv[i] + 14);
+            }
+        }
+    } catch (const std::exception& e) {
+        Log::Error(Event::General, std::string{"probe: "} + e.what());
+        return 1;
+    }
 
     int framesRendered = 0;
     int framesWithContent = 0;
