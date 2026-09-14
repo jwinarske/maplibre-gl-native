@@ -1246,7 +1246,24 @@ int main(int argc, char* argv[]) {
         }
         return 13.0;
     }();
-    map.jumpTo(CameraOptions().withCenter(LatLng{51.505, -0.11}).withZoom(zoom));
+    // Where the camera looks, for a style whose data is not over London. Every committed golden
+    // is captured at the default, so a capture without these is byte-identical to one from
+    // before they existed -- the same contract `--zoom` is held to.
+    //
+    // It exists because a scene cannot otherwise be captured at all: heat_p's source is a Berlin
+    // extract, and a probe fixed on 51.505,-0.11 renders an empty frame and dumps a background.
+    const auto coordinate = [&](const char* flag, double fallback) {
+        const std::size_t len = std::strlen(flag);
+        for (int i = 1; i < argc; ++i) {
+            if (std::strncmp(argv[i], flag, len) == 0) {
+                return std::strtod(argv[i] + len, nullptr);
+            }
+        }
+        return fallback;
+    };
+    const double lat = coordinate("--lat=", 51.505);
+    const double lon = coordinate("--lon=", -0.11);
+    map.jumpTo(CameraOptions().withCenter(LatLng{lat, lon}).withZoom(zoom));
 
     int framesRendered = 0;
     int framesWithContent = 0;
