@@ -13,6 +13,7 @@
 
 #include <args.hxx>
 
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
@@ -166,6 +167,33 @@ int main(int argc, char* argv[]) {
     if (debug) {
         map.setDebug(debug ? mln::MapDebugOptions::TileBorders | mln::MapDebugOptions::ParseStatus
                            : mln::MapDebugOptions::NoDebug);
+    }
+
+    // Where a coordinate lands, for comparing a frontend's own projection against this one.
+    // `Map::pixelForLatLng` is the public pair, which is y down from the top left;
+    // `TransformState`'s is the same value subtracted from the height. Both are printed because
+    // the two conventions are one line apart in `Transform::latLngToScreenCoordinate` and the
+    // difference is exactly what is being checked.
+    if (const char* probe = std::getenv("MLN_PROBE_LATLNG")) {
+        double probeLat = 0;
+        double probeLon = 0;
+        if (std::sscanf(probe, "%lf,%lf", &probeLat, &probeLon) == 2) {
+            const ScreenCoordinate at = map.pixelForLatLng(LatLng{probeLat, probeLon});
+            std::fprintf(stderr, "probe latlng=%.6f,%.6f transform=%.4f,%.4f state=%.4f,%.4f\n",
+                         probeLat, probeLon, at.x, at.y, at.x, height - at.y);
+        }
+    }
+
+    // The inverse, at a screen pixel. Given in `TransformState`'s own y-up coordinates, which is
+    // what `hatShadowShiftVector` works in, and converted to the public y-down pair on the way in.
+    if (const char* probe = std::getenv("MLN_PROBE_PIXEL")) {
+        double px = 0;
+        double py = 0;
+        if (std::sscanf(probe, "%lf,%lf", &px, &py) == 2) {
+            const LatLng at = map.latLngForPixel(ScreenCoordinate{px, height - py});
+            std::fprintf(stderr, "probe pixel state=%.4f,%.4f -> %.8f,%.8f\n",
+                         px, py, at.latitude(), at.longitude());
+        }
     }
 
     try {
