@@ -14,6 +14,7 @@
 #include <args.hxx>
 
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
@@ -21,6 +22,7 @@
 #include <sstream>
 
 #include "annotations.hpp"
+#include "script.hpp"
 
 
 int main(int argc, char* argv[]) {
@@ -64,6 +66,11 @@ int main(int argc, char* argv[]) {
         argumentParser, "file", "GeoJSON FeatureCollection to add as annotations", {"annotations"});
     args::ValueFlagList<std::string> annotationImageValues(
         argumentParser, "id=file", "Image a symbol annotation's `icon` can name", {"annotation-image"});
+    args::ValueFlag<std::string> scriptValue(
+        argumentParser,
+        "file",
+        "Render-test operations to replay once the style has loaded, before the frame drawn",
+        {"script"});
 
     try {
         argumentParser.ParseCLI(argc, argv);
@@ -134,7 +141,29 @@ int main(int argc, char* argv[]) {
         style = std::string("file://") + style;
     }
 
-    map.getStyle().loadURL(style);
+    // A script names what the style holds, so the style has to exist before the operations run --
+    // and `loadURL` is asynchronous, so nothing exists until a frame has been drawn. Read here and
+    // handed over whole, the style is loaded by the time the operations are applied, which is the
+    // order the render tests apply theirs in.
+    //
+    // It is not a tidiness: an `addImage` after a frame has been drawn changes nothing at all. The
+    // tile has been laid out, the symbol that wanted the image has been laid out without it, and
+    // nothing lays it out again -- the icon is simply absent, in every map mode. Loaded this way
+    // the image is in hand before any tile is laid out, and the symbol finds it.
+    //
+    // So a script wants a style this tool can read. A remote one is refused rather than served by
+    // a second path that quietly draws a different picture.
+    if (scriptValue) {
+        if (style.rfind("file://", 0) != 0) {
+            std::cerr << "Error: --script wants a style this tool can read as a file, so that the "
+                         "operations run against a style that is already loaded"
+                      << std::endl;
+            exit(1);
+        }
+        map.getStyle().loadJSON(mln_script::readFile(style.substr(std::strlen("file://"))));
+    } else {
+        map.getStyle().loadURL(style);
+    }
 
     // Before the render, because the render is what loads the style, and `onStyleLoaded` re-runs
     // `AnnotationManager::updateStyle` -- so the source and layers survive the style replacing them.
@@ -193,6 +222,19 @@ int main(int argc, char* argv[]) {
             const LatLng at = map.latLngForPixel(ScreenCoordinate{px, height - py});
             std::fprintf(stderr, "probe pixel state=%.4f,%.4f -> %.8f,%.8f\n",
                          px, py, at.latitude(), at.longitude());
+        }
+    }
+
+    // A script names what the style holds -- a source by its id -- and the style is loaded by
+    // rendering, so the first frame is what makes those names mean anything. It is drawn and
+    // thrown away; the picture written below is the one after the calls, which is the frame a
+    // consumer settles on and the only thing two renderers can be compared on.
+    if (scriptValue) {
+        try {
+            mln_script::applyScript(map, args::get(scriptValue));
+        } catch (const std::exception& e) {
+            std::cerr << "Error: " << e.what() << std::endl;
+            exit(1);
         }
     }
 
