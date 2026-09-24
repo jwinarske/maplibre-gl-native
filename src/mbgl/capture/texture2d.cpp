@@ -62,9 +62,14 @@ size_t Texture2D::getPixelStride() const noexcept {
             return 1 * numChannels();
         case gfx::TextureChannelDataType::HalfFloat:
             return 2 * numChannels();
-        default:
-            return 0;
+        case gfx::TextureChannelDataType::Float:
+            return 4 * numChannels();
     }
+    // Enumerated exhaustively above rather than through a default, because a stride of zero is
+    // silent: it allocates nothing, which makes `upload` skip its memcpy and `flush` record a
+    // texture with no bytes. That is the shape a color relief's RGBA-float elevation stops had
+    // for as long as `Float` fell through -- the dump showed a 5x1 whose hash was the FNV seed.
+    return 0;
 }
 
 size_t Texture2D::numChannels() const noexcept {
