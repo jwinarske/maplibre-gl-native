@@ -52,7 +52,7 @@ jobs:
 
       - run: brew install webp libuv llvm
 
-      - uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518 # v2.86.5
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: armerge@2
 
@@ -110,7 +110,7 @@ jobs:
       - name: Install dependencies
         run: .github/scripts/install-linux-deps
 
-      - uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518 # v2.86.5
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: armerge@2
 
